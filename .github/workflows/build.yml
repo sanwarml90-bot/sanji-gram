@@ -41,10 +41,15 @@ jobs:
           SG_API_ID: ${{ secrets.API_ID }}
           SG_API_HASH: ${{ secrets.API_HASH }}
         run: |
-          FILE=TMessagesProj/src/main/java/org/telegram/messenger/BuildVars.java
-          sed -i "s/public static int APP_ID = [0-9]*;/public static int APP_ID = ${SG_API_ID};/" "$FILE"
-          sed -i "s/public static String APP_HASH = \"[^"]*\";/public static String APP_HASH = \"${SG_API_HASH}\";/" "$FILE"
-          grep -n "APP_ID\|APP_HASH" "$FILE"
+          python3 - <<'PY'
+          import os, re
+          p = "TMessagesProj/src/main/java/org/telegram/messenger/BuildVars.java"
+          s = open(p).read()
+          s = re.sub(r"public static int APP_ID = \d+;", "public static int APP_ID = " + os.environ["SG_API_ID"] + ";", s)
+          s = re.sub(r'public static String APP_HASH = "[^"]*";', 'public static String APP_HASH = "' + os.environ["SG_API_HASH"] + '";', s)
+          open(p, "w").write(s)
+          print([l.strip() for l in s.splitlines() if "APP_ID =" in l or "APP_HASH =" in l])
+          PY
 
       - name: Build debug APK
         run: |
