@@ -1,0 +1,52 @@
+name: Build Sanji Gram APK
+
+on:
+  push:
+    branches: [ master ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: true
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install NDK and CMake
+        run: |
+          sdkmanager "ndk;25.1.8937393" "cmake;3.22.1"
+          echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/25.1.8937393" >> $GITHUB_ENV
+
+      - name: Inject API credentials
+        env:
+          SG_API_ID: ${{ secrets.API_ID }}
+          SG_API_HASH: ${{ secrets.API_HASH }}
+        run: |
+          FILE=TMessagesProj/src/main/java/org/telegram/messenger/BuildVars.java
+          sed -i "s/public static int APP_ID = [0-9]*;/public static int APP_ID = ${SG_API_ID};/" "$FILE"
+          sed -i "s/public static String APP_HASH = \"[^\"]*\";/public static String APP_HASH = \"${SG_API_HASH}\";/" "$FILE"
+          grep -n "APP_ID\|APP_HASH" "$FILE"
+
+      - name: Build debug APK
+        run: |
+          ./gradlew :TMessagesProj:assembleAfatDebug --stacktrace
+        env:
+          ORG_GRADLE_PROJECT_TMessagesProj_APP_ID: ${{ secrets.API_ID }}
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: sanji-gram-apk
+          path: TMessagesProj/build/outputs/apk/**/debug/*.apk
+          if-no-files-found: error
