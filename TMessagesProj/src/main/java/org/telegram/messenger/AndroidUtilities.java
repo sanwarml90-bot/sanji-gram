@@ -3669,7 +3669,7 @@ public class AndroidUtilities {
         }
         File storageDir = null;
         if (Environment.MEDIA_MOUNTED.equals(Environment.getExternalStorageState())) {
-            storageDir = new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES), "Telegram");
+            storageDir = new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES), "Sanji Gram");
             if (!storageDir.mkdirs()) {
                 if (!storageDir.exists()) {
                     if (BuildVars.LOGS_ENABLED) {
@@ -4726,7 +4726,7 @@ public class AndroidUtilities {
             }
         }));
         if (!TextUtils.isEmpty(secret)) {
-            final TableView.TableRowFullContent tableRow = tableView.addFullRow(getString(R.string.UseProxyTelegramInfo2));
+            final TableView.TableRowFullContent tableRow = tableView.addFullRow(getString(R.string.UseProxySanjiGramInfo2));
             tableRow.setFilled(true);
             final SpoilersTextView textView = (SpoilersTextView) tableRow.getChildAt(0);
             textView.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 11);
@@ -6657,7 +6657,7 @@ public class AndroidUtilities {
                     }
                     break;
             }
-            return formatString("TelegramVersion", R.string.TelegramVersion, String.format(Locale.US, "v%s (%d) %s", pInfo.versionName, code, abi));
+            return formatString("SanjiGramVersion", R.string.SanjiGramVersion, String.format(Locale.US, "v%s (%d) %s", pInfo.versionName, code, abi));
         } catch (Exception e) {
             FileLog.e(e);
         }

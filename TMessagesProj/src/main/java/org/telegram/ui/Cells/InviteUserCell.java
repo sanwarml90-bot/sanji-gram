@@ -131,7 +131,7 @@ public class InviteUserCell extends FrameLayout {
         statusTextView.setTag(Theme.key_windowBackgroundWhiteGrayText);
         statusTextView.setTextColor(Theme.getColor(Theme.key_windowBackgroundWhiteGrayText));
         if (currentContact.imported > 0) {
-            statusTextView.setText(LocaleController.formatPluralString("TelegramContacts", currentContact.imported));
+            statusTextView.setText(LocaleController.formatPluralString("SanjiGramContacts", currentContact.imported));
         } else {
             statusTextView.setText(currentContact.phones.get(0));
         }

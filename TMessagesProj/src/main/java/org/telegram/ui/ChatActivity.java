@@ -29562,7 +29562,7 @@ public class ChatActivity extends BaseFragment implements
                     span.full = false;
                     emoji.setSpan(span, 0, emoji.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
                 }
-                SpannableString link = new SpannableString(LocaleController.getString(R.string.TelegramPremium));
+                SpannableString link = new SpannableString(LocaleController.getString(R.string.SanjiGramPremium));
                 link.setSpan(new ClickableSpan() {
                     @Override
                     public void onClick(@NonNull View view) {
@@ -44562,7 +44562,7 @@ public class ChatActivity extends BaseFragment implements
         final boolean isMail = str.startsWith("mailto:");
 
         if (!isMail) {
-            options.add(customTabs && !isHashtag ? R.drawable.menu_website : R.drawable.msg_openin, getString(customTabs && !isHashtag ? R.string.OpenInTelegramBrowser2 : R.string.Open), () -> {
+            options.add(customTabs && !isHashtag ? R.drawable.menu_website : R.drawable.msg_openin, getString(customTabs && !isHashtag ? R.string.OpenInSanjiGramBrowser2 : R.string.Open), () -> {
                 if (str.startsWith("video?")) {
                     didPressMessageUrl(span, false, messageObject, cell);
                 } else if (customTabs && !isHashtag) {
@@ -44590,7 +44590,7 @@ public class ChatActivity extends BaseFragment implements
                 }
             });
         } else if (!isMail && !isHashtag && !customTabs && allowCustomTabs && !inAppBrowser) {
-            options.add(R.drawable.menu_website, getString(R.string.OpenInTelegramBrowser2), () -> {
+            options.add(R.drawable.menu_website, getString(R.string.OpenInSanjiGramBrowser2), () -> {
                 if (MessagesController.getInstance(currentAccount).isWebBrowserExceptionsLimitReached(false)) {
                     Browser.openInTelegramBrowser(getParentActivity(), str, null);
                 } else {
@@ -45050,7 +45050,7 @@ public class ChatActivity extends BaseFragment implements
                 options.addGap();
             }
             if (user == null) {
-                options.add(R.drawable.menu_invit_telegram, getString(R.string.InviteToTelegramShort), () -> {
+                options.add(R.drawable.menu_invit_telegram, getString(R.string.InviteToSanjiGramShort), () -> {
                     if (getParentActivity() == null) return;
                     try {
                         Intent intent = new Intent(Intent.ACTION_VIEW, Uri.fromParts("sms", phone, null));
@@ -45068,14 +45068,14 @@ public class ChatActivity extends BaseFragment implements
                     BulletinFactory.of(this).createCopyBulletin(LocaleController.getString(R.string.PhoneCopied)).show();
                 });
                 options.addGap();
-                options.addText(getString(R.string.NumberNotOnTelegram), 13);
+                options.addText(getString(R.string.NumberNotOnSanjiGram), 13);
             } else {
                 options.add(R.drawable.msg_discussion, getString(R.string.SendMessage), () -> presentFragment(ChatActivity.of(user.id)));
                 if (!UserObject.isUserSelf(user)) {
-                    options.add(R.drawable.msg_calls, getString(R.string.VoiceCallViaTelegram), () -> {
+                    options.add(R.drawable.msg_calls, getString(R.string.VoiceCallViaSanjiGram), () -> {
                         VoIPHelper.startCall(user, false, userInfo != null && userInfo.video_calls_available, getParentActivity(), userInfo, getAccountInstance());
                     });
-                    options.add(R.drawable.msg_videocall, getString(R.string.VideoCallViaTelegram), () -> {
+                    options.add(R.drawable.msg_videocall, getString(R.string.VideoCallViaSanjiGram), () -> {
                         VoIPHelper.startCall(user, true, userInfo != null && userInfo.video_calls_available, getParentActivity(), userInfo, getAccountInstance());
                     });
                 }

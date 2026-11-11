@@ -494,7 +494,7 @@ public abstract class BotWebViewContainer extends FrameLayout implements Notific
                 final PackageInfo packageInfo = ApplicationLoader.applicationContext.getPackageManager().getPackageInfo(ApplicationLoader.applicationContext.getPackageName(), 0);
                 final int perf = SharedConfig.getDevicePerformanceClass();
                 final String perfName = perf == SharedConfig.PERFORMANCE_CLASS_LOW ? "LOW" : perf == SharedConfig.PERFORMANCE_CLASS_AVERAGE ? "AVERAGE" : "HIGH";
-                useragent += " Telegram-Android/" + packageInfo.versionName + " (" + capitalizeFirst(Build.MANUFACTURER) + " " + Build.MODEL + "; Android " + Build.VERSION.RELEASE + "; SDK " + Build.VERSION.SDK_INT + "; " + perfName + ")";
+                useragent += " Sanji Gram-Android/" + packageInfo.versionName + " (" + capitalizeFirst(Build.MANUFACTURER) + " " + Build.MODEL + "; Android " + Build.VERSION.RELEASE + "; SDK " + Build.VERSION.SDK_INT + "; " + perfName + ")";
             }
             settings.setUserAgentString(useragent);
         } catch (Exception e) {
@@ -3987,7 +3987,7 @@ public abstract class BotWebViewContainer extends FrameLayout implements Notific
                             builder.setTitleMultipleLines(true);
                             builder.setTitle(formattedUrl);
                             builder.setItems(new CharSequence[]{
-                                    LocaleController.getString(R.string.OpenInTelegramBrowser),
+                                    LocaleController.getString(R.string.OpenInSanjiGramBrowser),
                                     LocaleController.getString(R.string.OpenInSystemBrowser),
                                     LocaleController.getString(R.string.Copy)
                             }, (dialog, which) -> {

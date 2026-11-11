@@ -7249,14 +7249,14 @@ public class LaunchActivity extends BasePermissionsActivity implements INavigati
                     builder.setPositiveButton(LocaleController.getString(R.string.Cancel), null);
                     builder.setNegativeButton(LocaleController.getString(R.string.LogOut), (dialog, which) -> MessagesController.getInstance(currentAccount).performLogout(2));
                 } else if (type.startsWith("PREMIUM_")) {
-                    builder.setTitle(LocaleController.getString(R.string.TelegramPremium));
+                    builder.setTitle(LocaleController.getString(R.string.SanjiGramPremium));
                     builder.setPositiveButton(LocaleController.getString(R.string.OK), null);
                 } else {
                     builder.setPositiveButton(LocaleController.getString(R.string.OK), null);
                 }
             } else if (reason == 3) {
                 builder.setTitle(LocaleController.getString(R.string.Proxy));
-                builder.setMessage(LocaleController.getString(R.string.UseProxyTelegramError));
+                builder.setMessage(LocaleController.getString(R.string.UseProxySanjiGramError));
                 builder.setPositiveButton(LocaleController.getString(R.string.OK), null);
                 proxyErrorDialog = showAlertDialog(builder);
                 return;

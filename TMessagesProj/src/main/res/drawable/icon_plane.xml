@@ -3,7 +3,7 @@
     android:height="90dp"
     android:viewportWidth="90"
     android:viewportHeight="90">
-  <!-- Sanji Gram: white paper plane matching the Sanji Gram logo (replaces the stock Telegram plane). Used as the monochrome adaptive-icon drawable. -->
+  <!-- Sanji Gram: white paper plane matching the Sanji Gram logo (replaces the stock plane). Used as the monochrome adaptive-icon drawable. -->
   <path
       android:pathData="M14,38 L68,20 L60,66 L34,48 L54,30 Z"
       android:strokeWidth="1"

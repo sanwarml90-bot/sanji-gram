@@ -288,7 +288,7 @@ public class ProxySettingsActivity extends BaseFragment {
             if (a == 0) {
                 typeCell[a].setText(LocaleController.getString(R.string.UseProxySocks5), t == currentType, true);
             } else if (a == 1) {
-                typeCell[a].setText(LocaleController.getString(R.string.UseProxyTelegram), t == currentType, true);
+                typeCell[a].setText(LocaleController.getString(R.string.UseProxySanjiGram), t == currentType, true);
             } else {
                 typeCell[a].setText(LocaleController.getString(R.string.UseProxyWeb), t == currentType, false);
             }
@@ -468,7 +468,7 @@ public class ProxySettingsActivity extends BaseFragment {
             if (i == 0) {
                 bottomCells[i].setText(LocaleController.getString(R.string.UseProxyInfo));
             } else {
-                bottomCells[i].setText(LocaleController.getString(R.string.UseProxyTelegramInfo) + "\n\n" + LocaleController.getString(R.string.UseProxyTelegramInfo2));
+                bottomCells[i].setText(LocaleController.getString(R.string.UseProxySanjiGramInfo) + "\n\n" + LocaleController.getString(R.string.UseProxySanjiGramInfo2));
                 bottomCells[i].setVisibility(View.GONE);
             }
             linearLayout2.addView(bottomCells[i], LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT));
@@ -764,7 +764,7 @@ public class ProxySettingsActivity extends BaseFragment {
             } else if (currentType == ProxySettings.Type.MTPROTO) {
                 bottomCells[0].setVisibility(View.GONE);
                 bottomCells[1].setVisibility(View.VISIBLE);
-                bottomCells[1].setText(LocaleController.getString(R.string.UseProxyTelegramInfo) + "\n\n" + LocaleController.getString(R.string.UseProxyTelegramInfo2));
+                bottomCells[1].setText(LocaleController.getString(R.string.UseProxySanjiGramInfo) + "\n\n" + LocaleController.getString(R.string.UseProxySanjiGramInfo2));
                 ((View) inputFields[FIELD_SECRET].getParent()).setVisibility(View.VISIBLE);
                 ((View) inputFields[FIELD_PASSWORD].getParent()).setVisibility(View.GONE);
                 ((View) inputFields[FIELD_USER].getParent()).setVisibility(View.GONE);

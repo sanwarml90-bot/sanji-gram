@@ -60,7 +60,7 @@ public class MusicBrowserService extends MediaBrowserService {
     public void onLoadChildren(@NonNull String parentMediaId, @NonNull Result<List<MediaBrowser.MediaItem>> result) {
         TelegramMediaSession holder = TelegramMediaSession.getInstance(this);
         if (holder.isPasscodeLocked()) {
-            Toast.makeText(getApplicationContext(), LocaleController.getString(R.string.EnterYourTelegramPasscode), Toast.LENGTH_LONG).show();
+            Toast.makeText(getApplicationContext(), LocaleController.getString(R.string.EnterYourSanjiGramPasscode), Toast.LENGTH_LONG).show();
             stopSelf();
             result.detach();
             return;

@@ -1137,9 +1137,9 @@ public class UserSelectorBottomSheet extends BottomSheetWithRecyclerListView imp
                 return getString(R.string.GiftStarsTitle);
             case TYPE_STAR_GIFT:
             case TYPE_PREMIUM:
-                return getString(R.string.GiftTelegramPremiumOrStarsTitle);
+                return getString(R.string.GiftSanjiGramPremiumOrStarsTitle);
         }
-        return getString(R.string.GiftTelegramPremiumTitle);
+        return getString(R.string.GiftSanjiGramPremiumTitle);
     }
 
     @Override

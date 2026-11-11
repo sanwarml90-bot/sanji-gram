@@ -334,7 +334,7 @@ public class PremiumFeatureBottomSheet extends BottomSheet implements Notificati
                     actionBar.setTitle(LocaleController.getString(R.string.FeaturePreviewGifts));
                     actionBar.requestLayout();
                 } else if (premiumFeatures.get(i).type == PremiumPreviewFragment.PREMIUM_FEATURE_BUSINESS) {
-                    actionBar.setTitle(LocaleController.getString(R.string.TelegramBusiness));
+                    actionBar.setTitle(LocaleController.getString(R.string.SanjiGramBusiness));
                     actionBar.requestLayout();
                 }
                 checkPage();
@@ -565,7 +565,7 @@ public class PremiumFeatureBottomSheet extends BottomSheet implements Notificati
 
     private void setButtonText() {
         if (forceAbout) {
-            premiumButtonView.buttonTextView.setText(LocaleController.getString(R.string.AboutTelegramPremium));
+            premiumButtonView.buttonTextView.setText(LocaleController.getString(R.string.AboutSanjiGramPremium));
         } else if (onlySelectedType) {
             if (startType == PremiumPreviewFragment.PREMIUM_FEATURE_REACTIONS) {
                 premiumButtonView.buttonTextView.setText(LocaleController.getString(R.string.UnlockPremiumReactions));
@@ -574,7 +574,7 @@ public class PremiumFeatureBottomSheet extends BottomSheet implements Notificati
                 premiumButtonView.buttonTextView.setText(LocaleController.getString(R.string.UnlockPremiumIcons));
                 premiumButtonView.setIcon(R.raw.unlock_icon);
             } else {
-                premiumButtonView.buttonTextView.setText(LocaleController.getString(R.string.AboutTelegramPremium));
+                premiumButtonView.buttonTextView.setText(LocaleController.getString(R.string.AboutSanjiGramPremium));
             }
         } else {
             premiumButtonView.buttonTextView.setText(PremiumPreviewFragment.getPremiumButtonText(currentAccount, selectedTier));
@@ -635,7 +635,7 @@ public class PremiumFeatureBottomSheet extends BottomSheet implements Notificati
             actionBar.setTitle(LocaleController.getString(R.string.UpgradedStories));
             actionBar.requestLayout();
         } else if (premiumFeatures.get(selectedPosition).type == PremiumPreviewFragment.PREMIUM_FEATURE_BUSINESS) {
-            actionBar.setTitle(LocaleController.getString(R.string.TelegramBusiness));
+            actionBar.setTitle(LocaleController.getString(R.string.SanjiGramBusiness));
             actionBar.requestLayout();
         } else if (premiumFeatures.get(selectedPosition).type == PremiumPreviewFragment.FEATURE_GIFTS) {
             actionBar.setTitle(LocaleController.getString(R.string.FeaturePreviewGifts));
