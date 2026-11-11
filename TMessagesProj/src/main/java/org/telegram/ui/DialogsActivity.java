@@ -591,6 +591,8 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
     private ActionBarMenuSubItem readItem;
     @Nullable
     private ActionBarMenuSubItem blockItem;
+    @Nullable
+    private ActionBarMenuSubItem leaveItem;
 
     private float additionalFloatingTranslation;
     private float floatingButtonPanOffset;
@@ -711,6 +713,7 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
     private final static int add_to_folder = 109;
     private final static int remove_from_folder = 110;
     private final static int community_ungroup = 111;
+    private final static int leave = 112;
 
     private final static int ARCHIVE_ITEM_STATE_PINNED = 0;
     private final static int ARCHIVE_ITEM_STATE_SHOWED = 1;
@@ -4007,7 +4010,7 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
                         undoView.showWithAction(did, UndoView.ACTION_REMOVED_FROM_FOLDER, neverShow.size(), filter, null, null);
                     }
                     hideActionMode(false);
-                } else if (id == pin || id == read || id == delete || id == clear || id == mute || id == archive || id == block || id == archive2 || id == pin2) {
+                } else if (id == pin || id == read || id == delete || id == clear || id == mute || id == archive || id == block || id == archive2 || id == pin2 || id == leave) {
                     performSelectedDialogsAction(selectedDialogs, id, true, false);
                 }
             }
@@ -6748,6 +6751,7 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
         readItem = otherItem.addSubItem(read, R.drawable.msg_markread, LocaleController.getString(R.string.MarkAsRead));
         clearItem = otherItem.addSubItem(clear, R.drawable.msg_clear, LocaleController.getString(R.string.ClearHistory));
         blockItem = otherItem.addSubItem(block, R.drawable.msg_block, LocaleController.getString(R.string.BlockUser));
+        leaveItem = otherItem.addSubItem(leave, R.drawable.msg_leave, LocaleController.getString(R.string.SanjiGramLeave));
 
         muteItem.setOnLongClickListener(e -> {
             performSelectedDialogsAction(selectedDialogs, mute, true, true);
@@ -9175,6 +9179,20 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
         return dialog.pinned;
     }
 
+    // Sanji Gram: dialogs the user can leave — groups and channels they are a member of.
+    // 1:1 user chats and secret chats are filtered out (leaving them makes no sense).
+    private ArrayList<Long> getLeavableDialogs(ArrayList<Long> dialogs) {
+        ArrayList<Long> leavable = new ArrayList<>();
+        for (int a = 0; a < dialogs.size(); a++) {
+            long did = dialogs.get(a);
+            TLRPC.Chat chat = getMessagesController().getChat(-did);
+            if (chat != null && !ChatObject.isNotInChat(chat)) {
+                leavable.add(did);
+            }
+        }
+        return leavable;
+    }
+
     private void performSelectedDialogsAction(ArrayList<Long> selectedDialogs, int action, boolean alert, boolean longPress) {
         performSelectedDialogsAction(selectedDialogs, action, alert, longPress, null);
     }
@@ -9370,6 +9388,29 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
                 }
                 hideActionMode(false);
             });
+            return;
+        } else if (action == leave) {
+            // Sanji Gram: bulk leave — leave all selected groups/channels at once.
+            ArrayList<Long> leavableDialogs = getLeavableDialogs(selectedDialogs);
+            if (leavableDialogs.isEmpty()) {
+                return;
+            }
+            if (alert) {
+                int leaveCount = leavableDialogs.size();
+                String chats = LocaleController.formatPluralString("Chats", leaveCount);
+                AlertsCreator.showSimpleConfirmAlert(this,
+                        LocaleController.formatString("LeaveChats", R.string.LeaveChats, chats),
+                        LocaleController.formatString("SanjiGramLeaveChatsText", R.string.SanjiGramLeaveChatsText, chats),
+                        LocaleController.formatString("LeaveChats", R.string.LeaveChats, chats),
+                        true, () -> performSelectedDialogsAction(selectedDialogs, leave, false, longPress, dialogsIdsToRevoke));
+                return;
+            }
+            TLRPC.User currentUser = getMessagesController().getUser(getUserConfig().getClientUserId());
+            for (int a = 0; a < leavableDialogs.size(); a++) {
+                getMessagesController().deleteParticipantFromChat(-leavableDialogs.get(a), currentUser, null, false, false);
+            }
+            BulletinFactory.of(this).createSimpleBulletin(R.raw.contact_check, LocaleController.formatString("SanjiGramLeftChats", R.string.SanjiGramLeftChats, LocaleController.formatPluralString("Chats", leavableDialogs.size()))).show();
+            hideActionMode(false);
             return;
         }
         int minPinnedNum = Integer.MAX_VALUE;
@@ -9791,6 +9832,7 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
             return;
         }
         int count = selectedDialogs.size();
+        int canLeaveCount = getLeavableDialogs(selectedDialogs).size();
         long selfUserId = getUserConfig().getClientUserId();
         SharedPreferences preferences = getNotificationsSettings();
         for (int a = 0; a < count; a++) {
@@ -9894,6 +9936,13 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
                 deleteItem.setVisibility(View.GONE);
             } else {
                 deleteItem.setVisibility(View.VISIBLE);
+            }
+        }
+        if (leaveItem != null) {
+            if (canLeaveCount == 0 || communitiesCount > 0) {
+                leaveItem.setVisibility(View.GONE);
+            } else {
+                leaveItem.setVisibility(View.VISIBLE);
             }
         }
         if (clearItem != null) {

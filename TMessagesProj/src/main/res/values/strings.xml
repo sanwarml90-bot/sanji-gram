@@ -3938,6 +3938,9 @@
     <string name="InactiveChannelSignature">channel, inactive for %1$s</string>
     <string name="InactiveChatSignature">%1$s, inactive for %2$s</string>
     <string name="LeaveChats">Leave %1$s</string>
+    <string name="SanjiGramLeave">Leave</string>
+    <string name="SanjiGramLeaveChatsText">You will leave %1$s and will no longer receive their messages.</string>
+    <string name="SanjiGramLeftChats">Left %1$s</string>
     <string name="TooManyCommunities">Too Many Communities</string>
     <string name="TooManyCommunitiesHintJoin">Sorry, you are a member of too many groups or channels. Please leave some before joining a new one.</string>
     <string name="TooManyCommunitiesHintCreate">Sorry, you are a member of too many groups or channels. Please leave some before creating a new one.</string>
