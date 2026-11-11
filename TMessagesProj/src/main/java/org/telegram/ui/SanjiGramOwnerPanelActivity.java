@@ -16,6 +16,7 @@ import org.telegram.messenger.BuildVars;
 import org.telegram.messenger.R;
 import org.telegram.messenger.SanjiGramConfig;
 import org.telegram.messenger.UserConfig;
+import org.telegram.ui.ActionBar.ActionBar;
 import org.telegram.ui.ActionBar.AlertDialog;
 import org.telegram.ui.ActionBar.BaseFragment;
 import org.telegram.ui.ActionBar.Theme;
@@ -214,7 +215,7 @@ public class SanjiGramOwnerPanelActivity extends BaseFragment {
             if (context == null) {
                 return true;
             }
-            AlertDialog.Builder builder = new AlertDialog.Builder(context, resourcesProvider);
+            AlertDialog.Builder builder = new AlertDialog.Builder(context, getResourceProvider());
             builder.setTitle("Remove Channel");
             builder.setMessage("Remove @" + username + " from the Owner Panel list?");
             builder.setPositiveButton(getString(R.string.Delete), (dialog, which) -> {
@@ -252,7 +253,7 @@ public class SanjiGramOwnerPanelActivity extends BaseFragment {
         if (context == null) {
             return;
         }
-        AlertDialog.Builder builder = new AlertDialog.Builder(context, resourcesProvider);
+        AlertDialog.Builder builder = new AlertDialog.Builder(context, getResourceProvider());
         builder.setTitle(title);
         final EditTextBoldCursor editText = new EditTextBoldCursor(context);
         editText.setHint(title);
@@ -260,8 +261,8 @@ public class SanjiGramOwnerPanelActivity extends BaseFragment {
         editText.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_URI);
         editText.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 16);
         editText.setText(initialText);
-        editText.setTextColor(Theme.getColor(Theme.key_dialogTextBlack, resourcesProvider));
-        editText.setHintTextColor(Theme.getColor(Theme.key_dialogSearchHint, resourcesProvider));
+        editText.setTextColor(Theme.getColor(Theme.key_dialogTextBlack, getResourceProvider()));
+        editText.setHintTextColor(Theme.getColor(Theme.key_dialogSearchHint, getResourceProvider()));
         FrameLayout container = new FrameLayout(context);
         container.addView(editText, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, Gravity.CENTER, 24, 4, 24, 4));
         builder.setView(container);

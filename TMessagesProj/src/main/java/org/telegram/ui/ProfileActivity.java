@@ -4508,14 +4508,14 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
                 }
             } else if (position == sanjiLockRow) {
                 // Sanji Gram: toggle chat lock (unlocking needs the app passcode).
-                long did = userId != 0 ? userId : (chatId != 0 ? -chatId : dialogId);
-                if (SanjiGramConfig.isChatLocked(did)) {
-                    MessagesController.showSanjiGramUnlockPrompt(ProfileActivity.this, did, () -> {
+                long lockDid = userId != 0 ? userId : (chatId != 0 ? -chatId : dialogId);
+                if (SanjiGramConfig.isChatLocked(lockDid)) {
+                    MessagesController.showSanjiGramUnlockPrompt(ProfileActivity.this, lockDid, () -> {
                         BulletinFactory.of(ProfileActivity.this).createCopyBulletin("Chat unlocked").show();
                         listAdapter.notifyItemChanged(position);
                     });
                 } else {
-                    SanjiGramConfig.setChatLocked(did, true);
+                    SanjiGramConfig.setChatLocked(lockDid, true);
                     BulletinFactory.of(ProfileActivity.this).createCopyBulletin("Chat locked").show();
                     listAdapter.notifyItemChanged(position);
                 }
@@ -13920,9 +13920,9 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
                             if (listView == null || msgCountRow == -1) {
                                 return;
                             }
-                            RecyclerListView.Holder holder = (RecyclerListView.Holder) listView.findViewHolderForPosition(msgCountRow);
-                            if (holder != null && holder.itemView instanceof TextDetailCell) {
-                                ((TextDetailCell) holder.itemView).setTextAndValue(String.valueOf(count), "Messages", false);
+                            RecyclerListView.Holder msgCountHolder = (RecyclerListView.Holder) listView.findViewHolderForPosition(msgCountRow);
+                            if (msgCountHolder != null && msgCountHolder.itemView instanceof TextDetailCell) {
+                                ((TextDetailCell) msgCountHolder.itemView).setTextAndValue(String.valueOf(count), "Messages", false);
                             }
                         }));
                     } else if (position == sanjiLockRow) {
