@@ -522,6 +522,23 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
     private int undoViewIndex;
     private UndoView[] undoView = new UndoView[2];
     private FilterTabsView filterTabsView;
+
+    // Sanji Gram: Plus-style filter tab bar (All / Users / Groups / Channels / Bots / Unread / Pinned).
+    public static final int SANJI_GRAM_TAB_ALL = 0;
+    public static final int SANJI_GRAM_TAB_USERS = 1;
+    public static final int SANJI_GRAM_TAB_GROUPS = 2;
+    public static final int SANJI_GRAM_TAB_CHANNELS = 3;
+    public static final int SANJI_GRAM_TAB_BOTS = 4;
+    public static final int SANJI_GRAM_TAB_UNREAD = 5;
+    public static final int SANJI_GRAM_TAB_PINNED = 6;
+    private static final int SANJI_GRAM_TABS_COUNT = 7;
+    private static final int SANJI_GRAM_TABS_HEIGHT = 48;
+    private int sanjiGramTabFilter = SANJI_GRAM_TAB_ALL;
+    private LinearLayout sanjiGramTabsView;
+    private View[] sanjiGramTabItems = new View[SANJI_GRAM_TABS_COUNT];
+    private ImageView[] sanjiGramTabIcons = new ImageView[SANJI_GRAM_TABS_COUNT];
+    private TextView[] sanjiGramTabBadges = new TextView[SANJI_GRAM_TABS_COUNT];
+
     private boolean askingForPermissions;
     private int searchViewPagerIndex;
     @Nullable
@@ -2079,6 +2096,11 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
 
             t += (int) (dp(36 + 14) * filterTabsVisibility);
             additionalPadding += (int) (dp(36 + 14) * filterTabsVisibility);
+
+            // Sanji Gram: Plus-style filter tab bar — reserve its height at the top of the list.
+            final float sanjiGramTabsVisibility = getSanjiGramTabsVisibilityFactor();
+            t += (int) (dp(SANJI_GRAM_TABS_HEIGHT) * sanjiGramTabsVisibility);
+            additionalPadding += (int) (dp(SANJI_GRAM_TABS_HEIGHT) * sanjiGramTabsVisibility);
 
             if (topPanelLayout != null) {
                 final int h = (int) topPanelLayout.getAnimatedHeightWithPadding(lerp((float) dp(14), dp(7), filterTabsVisibility));
@@ -5160,6 +5182,11 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
             contentView.addView(filterTabsView, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, 36 + 7 + 7, Gravity.TOP, 4, 0, 4, 0));
         }
 
+        // Sanji Gram: Plus-style filter tab bar (main chat list only).
+        if (initialDialogsType == DIALOGS_TYPE_DEFAULT && folderId == 0 && !onlySelect) {
+            createSanjiGramTabsView(context, contentView);
+        }
+
         if (fragmentSearchField != null) {
             fragmentSearchField.setupBlurredBackground(iBlur3FactoryLiquidGlass.create(fragmentSearchField, BlurredBackgroundProviderImpl.topPanel(resourceProvider)));
         }
@@ -6600,6 +6627,15 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
             filtersTabVisibility = filterTabsView.getAlpha();
             filtersTabHeight = dp(36 + 7) * filtersTabVisibility;
             totalOffset += filtersTabHeight;
+        }
+
+        // Sanji Gram: Plus-style filter tab bar sits directly below the stock filter tabs.
+        if (sanjiGramTabsView != null) {
+            float sanjiGramFactor = getSanjiGramTabsVisibilityFactor();
+            sanjiGramTabsView.setAlpha(sanjiGramFactor);
+            sanjiGramTabsView.setVisibility(sanjiGramFactor > 0 ? View.VISIBLE : View.GONE);
+            sanjiGramTabsView.setTranslationY(totalOffset - searchOffset);
+            totalOffset += dp(SANJI_GRAM_TABS_HEIGHT) * sanjiGramFactor;
         }
 
         if (topPanelLayout != null) {
@@ -10618,6 +10654,7 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
             if (filterTabsView != null && filterTabsView.getVisibility() == View.VISIBLE) {
                 filterTabsView.checkTabsCounter();
             }
+            updateSanjiGramTabBadges();
             slowedReloadAfterDialogClick = false;
         } else if (id == NotificationCenter.topicsDidLoaded) {
             updateVisibleRows(0);
@@ -10637,6 +10674,7 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
             if (filterTabsView != null && filterTabsView.getVisibility() == View.VISIBLE) {
                 filterTabsView.notifyTabCounterChanged(filterTabsView.getDefaultTabId());
             }
+            updateSanjiGramTabBadges();
         } else if (id == NotificationCenter.dialogsUnreadPollVotesCounterChanged) {
             updateVisibleRows(0);
         } else if (id == NotificationCenter.dialogsUnreadReactionsCounterChanged) {
@@ -10669,6 +10707,9 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
             updateVisibleRows(mask);
             if (filterTabsView != null && filterTabsView.getVisibility() == View.VISIBLE && (mask & MessagesController.UPDATE_MASK_READ_DIALOG_MESSAGE) != 0) {
                 filterTabsView.checkTabsCounter();
+            }
+            if (sanjiGramTabsView != null && (mask & (MessagesController.UPDATE_MASK_NEW_MESSAGE | MessagesController.UPDATE_MASK_READ_DIALOG_MESSAGE)) != 0) {
+                updateSanjiGramTabBadges();
             }
             if (communityId != 0 ) {
                 if ((mask & MessagesController.UPDATE_MASK_CHAT) != 0 || (mask & MessagesController.UPDATE_MASK_AVATAR) != 0 || (mask & MessagesController.UPDATE_MASK_CHAT_AVATAR) != 0 || (mask & MessagesController.UPDATE_MASK_CHAT_NAME) != 0) {
@@ -11069,6 +11110,164 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
 
     private ArrayList<TLRPC.Dialog> botShareDialogs;
 
+    // Sanji Gram: Plus-style filter tab bar.
+
+    private float getSanjiGramTabsVisibilityFactor() {
+        if (initialDialogsType != DIALOGS_TYPE_DEFAULT || folderId != 0 || onlySelect) {
+            return 0f;
+        }
+        return (1f - searchAnimationProgress) * (1f - progressToActionMode) * (1f - getRightSlidingProgress());
+    }
+
+    private boolean sanjiGramDialogMatchesTab(TLRPC.Dialog d, int tab) {
+        if (d == null) {
+            return false;
+        }
+        switch (tab) {
+            case SANJI_GRAM_TAB_ALL:
+                return true;
+            case SANJI_GRAM_TAB_USERS: {
+                if (!DialogObject.isUserDialog(d.id)) {
+                    return false;
+                }
+                TLRPC.User user = getMessagesController().getUser(d.id);
+                return user == null || !user.bot;
+            }
+            case SANJI_GRAM_TAB_GROUPS: {
+                if (!DialogObject.isChatDialog(d.id)) {
+                    return false;
+                }
+                TLRPC.Chat chat = getMessagesController().getChat(-d.id);
+                return chat != null && !ChatObject.isChannelAndNotMegaGroup(chat);
+            }
+            case SANJI_GRAM_TAB_CHANNELS: {
+                if (!DialogObject.isChatDialog(d.id)) {
+                    return false;
+                }
+                TLRPC.Chat chat = getMessagesController().getChat(-d.id);
+                return chat != null && ChatObject.isChannelAndNotMegaGroup(chat);
+            }
+            case SANJI_GRAM_TAB_BOTS: {
+                if (!DialogObject.isUserDialog(d.id)) {
+                    return false;
+                }
+                TLRPC.User user = getMessagesController().getUser(d.id);
+                return user != null && user.bot;
+            }
+            case SANJI_GRAM_TAB_UNREAD:
+                return d.unread_count > 0 || d.unread_mark;
+            case SANJI_GRAM_TAB_PINNED:
+                return d.pinned;
+            default:
+                return true;
+        }
+    }
+
+    private void createSanjiGramTabsView(Context context, ContentView contentView) {
+        int[] tabIcons = new int[]{
+                R.drawable.msg_folders,
+                R.drawable.msg_folders_private,
+                R.drawable.msg_folders_groups,
+                R.drawable.msg_folders_channels,
+                R.drawable.msg_folders_bots,
+                R.drawable.msg_folders_read,
+                R.drawable.msg_pin
+        };
+        sanjiGramTabsView = new LinearLayout(context);
+        sanjiGramTabsView.setOrientation(LinearLayout.HORIZONTAL);
+        sanjiGramTabsView.setGravity(Gravity.CENTER);
+        sanjiGramTabsView.setBackground(Theme.createRoundRectDrawable(dp(22), getThemedColor(Theme.key_windowBackgroundGray)));
+        for (int i = 0; i < SANJI_GRAM_TABS_COUNT; i++) {
+            final int tab = i;
+            FrameLayout item = new FrameLayout(context);
+            ImageView icon = new ImageView(context);
+            icon.setImageResource(tabIcons[i]);
+            icon.setScaleType(ImageView.ScaleType.CENTER_INSIDE);
+            item.addView(icon, LayoutHelper.createFrame(24, 24, Gravity.CENTER));
+            TextView badge = new TextView(context);
+            badge.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 10);
+            badge.setTypeface(AndroidUtilities.bold());
+            badge.setTextColor(0xffffffff);
+            badge.setGravity(Gravity.CENTER);
+            badge.setBackground(Theme.createRoundRectDrawable(dp(8), getThemedColor(Theme.key_chats_unreadCounter)));
+            badge.setPadding(dp(4), dp(1), dp(4), dp(1));
+            badge.setVisibility(View.GONE);
+            item.addView(badge, LayoutHelper.createFrame(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT, Gravity.RIGHT | Gravity.BOTTOM, 0, 0, dp(5), dp(5)));
+            item.setOnClickListener(v -> selectSanjiGramTab(tab));
+            sanjiGramTabsView.addView(item, LayoutHelper.createLinear(0, LayoutHelper.MATCH_PARENT, 1f, Gravity.CENTER, 0, 4, 0, 4));
+            sanjiGramTabItems[i] = item;
+            sanjiGramTabIcons[i] = icon;
+            sanjiGramTabBadges[i] = badge;
+        }
+        contentView.addView(sanjiGramTabsView, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, SANJI_GRAM_TABS_HEIGHT, Gravity.TOP, 8, 0, 8, 0));
+        updateSanjiGramTabsSelection();
+        updateSanjiGramTabBadges();
+    }
+
+    private void updateSanjiGramTabsSelection() {
+        if (sanjiGramTabItems == null) {
+            return;
+        }
+        int selectedColor = getThemedColor(Theme.key_chats_actionIcon);
+        int normalColor = getThemedColor(Theme.key_windowBackgroundWhiteGrayText);
+        for (int i = 0; i < SANJI_GRAM_TABS_COUNT; i++) {
+            if (sanjiGramTabItems[i] == null || sanjiGramTabIcons[i] == null) {
+                continue;
+            }
+            boolean selected = i == sanjiGramTabFilter;
+            sanjiGramTabItems[i].setBackground(selected ? Theme.createRoundRectDrawable(dp(12), getThemedColor(Theme.key_listSelector)) : null);
+            sanjiGramTabIcons[i].setColorFilter(new PorterDuffColorFilter(selected ? selectedColor : normalColor, PorterDuff.Mode.MULTIPLY));
+        }
+    }
+
+    private void updateSanjiGramTabBadges() {
+        if (sanjiGramTabBadges == null || sanjiGramTabsView == null) {
+            return;
+        }
+        int[] counts = new int[SANJI_GRAM_TABS_COUNT];
+        ArrayList<TLRPC.Dialog> dialogs = getMessagesController().getDialogs(folderId);
+        if (dialogs != null) {
+            for (int i = 0; i < dialogs.size(); i++) {
+                TLRPC.Dialog d = dialogs.get(i);
+                if (d == null || d.unread_count <= 0 && !d.unread_mark) {
+                    continue;
+                }
+                if (!SanjiGramConfig.isShowHiddenChats() && SanjiGramConfig.isChatHidden(d.id)) {
+                    continue;
+                }
+                for (int tab = 0; tab < SANJI_GRAM_TABS_COUNT; tab++) {
+                    if (sanjiGramDialogMatchesTab(d, tab)) {
+                        counts[tab]++;
+                    }
+                }
+            }
+        }
+        for (int i = 0; i < SANJI_GRAM_TABS_COUNT; i++) {
+            TextView badge = sanjiGramTabBadges[i];
+            if (badge == null) {
+                continue;
+            }
+            int count = counts[i];
+            if (count <= 0) {
+                badge.setVisibility(View.GONE);
+            } else {
+                badge.setVisibility(View.VISIBLE);
+                badge.setText(count > 99 ? "99+" : String.valueOf(count));
+            }
+        }
+    }
+
+    private void selectSanjiGramTab(int tab) {
+        if (sanjiGramTabFilter == tab) {
+            return;
+        }
+        sanjiGramTabFilter = tab;
+        updateSanjiGramTabsSelection();
+        if (viewPages != null && viewPages.length > 0 && viewPages[0] != null && viewPages[0].dialogsAdapter != null) {
+            viewPages[0].dialogsAdapter.updateList(viewPages[0].saveScrollPositionRunnable);
+        }
+    }
+
     @NonNull
     public ArrayList<TLRPC.Dialog> getDialogsArray(int currentAccount, int dialogsType, int folderId, boolean frozen) {
         if (frozen && frozenDialogsList != null) {
@@ -11086,7 +11285,18 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
                         filtered.add(d);
                     }
                 }
-                return filtered;
+                dialogs = filtered;
+            }
+            // Sanji Gram: Plus-style filter tabs — only the main chat list (folder 0).
+            if (folderId == 0 && sanjiGramTabFilter != SANJI_GRAM_TAB_ALL) {
+                ArrayList<TLRPC.Dialog> tabFiltered = new ArrayList<>(dialogs.size());
+                for (int i = 0; i < dialogs.size(); i++) {
+                    TLRPC.Dialog d = dialogs.get(i);
+                    if (d != null && sanjiGramDialogMatchesTab(d, sanjiGramTabFilter)) {
+                        tabFiltered.add(d);
+                    }
+                }
+                return tabFiltered;
             }
             return dialogs;
         } else if (dialogsType == DIALOGS_TYPE_WIDGET || dialogsType == DIALOGS_TYPE_IMPORT_HISTORY) {
