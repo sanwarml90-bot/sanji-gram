@@ -65,6 +65,7 @@ import android.media.MediaCodecList;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
+import android.os.Environment;
 import android.os.SystemClock;
 import android.text.SpannableString;
 import android.text.SpannableStringBuilder;
@@ -129,6 +130,7 @@ import androidx.viewpager.widget.PagerAdapter;
 import androidx.viewpager.widget.ViewPager;
 
 import org.telegram.PhoneFormat.PhoneFormat;
+import org.telegram.SQLite.SQLiteCursor;
 import org.telegram.messenger.AccountInstance;
 import org.telegram.messenger.AndroidUtilities;
 import org.telegram.messenger.ApplicationLoader;
@@ -159,6 +161,7 @@ import org.telegram.messenger.MessagesStorage;
 import org.telegram.messenger.NotificationCenter;
 import org.telegram.messenger.NotificationsController;
 import org.telegram.messenger.R;
+import org.telegram.messenger.SanjiGramConfig;
 import org.telegram.messenger.SendMessagesHelper;
 import org.telegram.messenger.SharedConfig;
 import org.telegram.messenger.SvgHelper;
@@ -167,6 +170,7 @@ import org.telegram.messenger.UserObject;
 import org.telegram.messenger.Utilities;
 import org.telegram.messenger.browser.Browser;
 import org.telegram.tgnet.ConnectionsManager;
+import org.telegram.tgnet.NativeByteBuffer;
 import org.telegram.tgnet.SerializedData;
 import org.telegram.tgnet.TLObject;
 import org.telegram.tgnet.TLRPC;
@@ -320,11 +324,14 @@ import org.telegram.ui.community.CommunitySheet;
 
 import java.io.BufferedInputStream;
 import java.io.BufferedOutputStream;
+import java.io.BufferedWriter;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
+import java.io.OutputStreamWriter;
 import java.text.DecimalFormat;
 import java.text.DecimalFormatSymbols;
+import java.text.SimpleDateFormat;
 import java.time.LocalDate;
 import java.time.Period;
 import java.util.ArrayList;
@@ -657,6 +664,13 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
     private int userInfoRow;
     private int channelInfoRow;
     private int usernameRow;
+    // Sanji Gram rows.
+    private int sanjiIdRow;
+    private int sanjiChannelLinkRow;
+    private int sanjiDownloadAllRow;
+    private int sanjiExportRow;
+    private int sanjiMsgCountRow;
+    private int sanjiLockRow;
     private int notificationsDividerRow;
     private int notificationsRow;
     private int bizHoursRow;
@@ -4478,6 +4492,30 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
                 openAddMember();
             } else if (position == usernameRow) {
                 processOnClickOrPress(position, view, x, y);
+            } else if (position == sanjiIdRow) {
+                // Sanji Gram: copy the User / Chat / Channel ID.
+                String idText = userId != 0 ? String.valueOf(userId) : (chatId != 0 ? String.valueOf(chatId) : null);
+                if (idText != null) {
+                    copySanjiGramText(idText, "ID copied");
+                }
+            } else if (position == sanjiChannelLinkRow) {
+                // Sanji Gram: copy the channel link.
+                if (currentChat != null && !TextUtils.isEmpty(currentChat.username)) {
+                    copySanjiGramText("https://t.me/" + currentChat.username, "Channel link copied");
+                }
+            } else if (position == sanjiLockRow) {
+                // Sanji Gram: toggle chat lock.
+                long did = userId != 0 ? userId : (chatId != 0 ? -chatId : dialogId);
+                boolean locked = !SanjiGramConfig.isChatLocked(did);
+                SanjiGramConfig.setChatLocked(did, locked);
+                BulletinFactory.of(ProfileActivity.this).createCopyBulletin(locked ? "Chat locked" : "Chat unlocked").show();
+                listAdapter.notifyItemChanged(position);
+            } else if (position == sanjiExportRow) {
+                // Sanji Gram: export chat to .txt.
+                exportSanjiGramChat();
+            } else if (position == sanjiDownloadAllRow) {
+                // Sanji Gram: download all media of this chat.
+                downloadAllSanjiGramMedia();
             } else if (position == linkedCommunityRow) {
                 if (currentChat != null) {
                     showDialog(new CommunitySheet(this, currentChat.linked_community_id));
@@ -10442,6 +10480,155 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
         return chatId != 0;
     }
 
+    // ---------- Sanji Gram helpers ----------
+
+    private void copySanjiGramText(String text, String toast) {
+        try {
+            android.content.ClipboardManager clipboard = (android.content.ClipboardManager) ApplicationLoader.applicationContext.getSystemService(Context.CLIPBOARD_SERVICE);
+            android.content.ClipData clip = android.content.ClipData.newPlainText("label", text);
+            clipboard.setPrimaryClip(clip);
+            BulletinFactory.of(this).createCopyBulletin(toast).show();
+        } catch (Exception e) {
+            FileLog.e(e);
+        }
+    }
+
+    private long sanjiGramDialogId() {
+        if (userId != 0) {
+            return userId;
+        } else if (chatId != 0) {
+            return -chatId;
+        }
+        return dialogId;
+    }
+
+    private String sanjiGramChatTitle() {
+        if (userId != 0) {
+            TLRPC.User user = getMessagesController().getUser(userId);
+            if (user != null) {
+                return UserObject.getUserName(user);
+            }
+            return "chat_" + userId;
+        } else if (currentChat != null) {
+            return currentChat.title;
+        }
+        return "chat";
+    }
+
+    /** Sanji Gram: Export Chat — writes the chat's text messages to a .txt file and shares it. */
+    private void exportSanjiGramChat() {
+        long did = sanjiGramDialogId();
+        String title = sanjiGramChatTitle();
+        BulletinFactory.of(this).createCopyBulletin("Exporting chat...").show();
+        new Thread(() -> {
+            StringBuilder sb = new StringBuilder();
+            SimpleDateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault());
+            int count = 0;
+            try {
+                SQLiteCursor cursor = getMessagesStorage().getDatabase().queryFinalized("SELECT data FROM messages_v2 WHERE uid = " + did + " ORDER BY mid ASC LIMIT 2000");
+                while (cursor.next()) {
+                    NativeByteBuffer data = cursor.byteBufferValue(0);
+                    if (data == null) {
+                        continue;
+                    }
+                    TLRPC.Message message = TLRPC.Message.TLdeserialize(data, data.readInt32(false), false);
+                    data.reuse();
+                    if (message == null || message.action != null) {
+                        continue;
+                    }
+                    String text = message.message;
+                    if (text == null) {
+                        text = "";
+                    }
+                    String sender;
+                    if (message.from_id != null && message.from_id.user_id != 0) {
+                        TLRPC.User from = getMessagesController().getUser(message.from_id.user_id);
+                        sender = from != null ? UserObject.getUserName(from) : ("user" + message.from_id.user_id);
+                    } else if (message.from_id != null && message.from_id.channel_id != 0) {
+                        sender = title;
+                    } else {
+                        sender = title;
+                    }
+                    sb.append("[").append(dateFormat.format(new Date((long) message.date * 1000))).append("] ");
+                    sb.append(sender).append(": ").append(text).append("\n");
+                    count++;
+                }
+                cursor.dispose();
+            } catch (Exception e) {
+                FileLog.e(e);
+            }
+            int finalCount = count;
+            AndroidUtilities.runOnUIThread(() -> {
+                try {
+                    String safeTitle = title.replaceAll("[^a-zA-Z0-9_\\- ]", "_").trim();
+                    if (safeTitle.isEmpty()) {
+                        safeTitle = "chat";
+                    }
+                    File dir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS);
+                    if (!dir.exists()) {
+                        dir.mkdirs();
+                    }
+                    File file = new File(dir, "SanjiGram_" + safeTitle + "_" + System.currentTimeMillis() + ".txt");
+                    BufferedWriter writer = new BufferedWriter(new OutputStreamWriter(new FileOutputStream(file), "UTF-8"));
+                    writer.write("Sanji Gram — Chat Export: " + title + "\nMessages: " + finalCount + "\n\n");
+                    writer.write(sb.toString());
+                    writer.close();
+                    Intent intent = new Intent(Intent.ACTION_SEND);
+                    intent.setType("text/plain");
+                    intent.putExtra(Intent.EXTRA_STREAM, FileProvider.getUriForFile(getParentActivity(), ApplicationLoader.getApplicationId() + ".provider", file));
+                    intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+                    getParentActivity().startActivity(Intent.createChooser(intent, "Share chat export"));
+                    BulletinFactory.of(ProfileActivity.this).createCopyBulletin("Exported " + finalCount + " messages").show();
+                } catch (Exception e) {
+                    FileLog.e(e);
+                    BulletinFactory.of(ProfileActivity.this).createCopyBulletin("Export failed").show();
+                }
+            });
+        }).start();
+    }
+
+    /** Sanji Gram: Download All Media — queues the chat's photos and videos for download. */
+    private void downloadAllSanjiGramMedia() {
+        long did = sanjiGramDialogId();
+        BulletinFactory.of(this).createCopyBulletin("Finding media...").show();
+        new Thread(() -> {
+            int queued = 0;
+            try {
+                SQLiteCursor cursor = getMessagesStorage().getDatabase().queryFinalized("SELECT data FROM messages_v2 WHERE uid = " + did + " ORDER BY mid DESC LIMIT 500");
+                while (cursor.next()) {
+                    NativeByteBuffer data = cursor.byteBufferValue(0);
+                    if (data == null) {
+                        continue;
+                    }
+                    TLRPC.Message message = TLRPC.Message.TLdeserialize(data, data.readInt32(false), false);
+                    data.reuse();
+                    if (message == null) {
+                        continue;
+                    }
+                    TLRPC.MessageMedia media = MessageObject.getMedia(message);
+                    if (media == null) {
+                        continue;
+                    }
+                    if (media.photo instanceof TLRPC.TL_photo) {
+                        TLRPC.PhotoSize size = FileLoader.getClosestPhotoSizeWithSize(media.photo.sizes, 1000);
+                        if (size != null && size.location != null) {
+                            FileLoader.getInstance(currentAccount).loadFile(ImageLocation.getForPhoto(size, media.photo), new Object(), null, 0, 0);
+                            queued++;
+                        }
+                    } else if (media.document != null && MessageObject.isVideoDocument(media.document)) {
+                        FileLoader.getInstance(currentAccount).loadFile(media.document, new Object(), 0, 0);
+                        queued++;
+                    }
+                }
+                cursor.dispose();
+            } catch (Exception e) {
+                FileLog.e(e);
+            }
+            int finalQueued = queued;
+            AndroidUtilities.runOnUIThread(() -> BulletinFactory.of(ProfileActivity.this).createCopyBulletin("Downloading " + finalQueued + " media files").show());
+        }).start();
+    }
+
     private void updateRowsIds() {
         updateNotifications(false);
 
@@ -10521,6 +10708,13 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
         locationRow = -1;
         channelInfoRow = -1;
         usernameRow = -1;
+        // Sanji Gram rows.
+        sanjiIdRow = -1;
+        sanjiChannelLinkRow = -1;
+        sanjiDownloadAllRow = -1;
+        sanjiExportRow = -1;
+        sanjiMsgCountRow = -1;
+        sanjiLockRow = -1;
         settingsTimerRow = -1;
         settingsKeyRow = -1;
         notificationsDividerRow = -1;
@@ -10713,6 +10907,16 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
                 if (user != null && username != null) {
                     usernameRow = rowCount++;
                 }
+                // Sanji Gram rows.
+                if (SanjiGramConfig.isShowIds()) {
+                    sanjiIdRow = rowCount++;
+                }
+                if (SanjiGramConfig.isMessageCounter()) {
+                    sanjiMsgCountRow = rowCount++;
+                }
+                sanjiLockRow = rowCount++;
+                sanjiExportRow = rowCount++;
+                sanjiDownloadAllRow = rowCount++;
                 if (userInfo != null) {
                     if (userInfo.birthday != null) {
                         birthdayRow = rowCount++;
@@ -10871,6 +11075,19 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
                 if (ChatObject.isPublic(currentChat)) {
                     usernameRow = rowCount++;
                 }
+                // Sanji Gram rows.
+                if (SanjiGramConfig.isShowIds()) {
+                    sanjiIdRow = rowCount++;
+                }
+                if (ChatObject.isChannel(currentChat) && currentChat != null && !TextUtils.isEmpty(currentChat.username)) {
+                    sanjiChannelLinkRow = rowCount++;
+                }
+                if (SanjiGramConfig.isMessageCounter()) {
+                    sanjiMsgCountRow = rowCount++;
+                }
+                sanjiLockRow = rowCount++;
+                sanjiExportRow = rowCount++;
+                sanjiDownloadAllRow = rowCount++;
             }
             if (emptyRow < 0 && emptyRow2 < 0) {
                 if (hasMusic || peerColor != null || actionsView == null) {
@@ -13623,6 +13840,43 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
                         }
                         detailCell.setTextAndValue(text, value, true);
                         detailCell.setContentDescriptionValueFirst(true);
+                    } else if (position == sanjiIdRow) {
+                        // Sanji Gram: show User / Chat / Channel ID.
+                        if (userId != 0) {
+                            detailCell.setTextAndValue(String.valueOf(userId), "User ID", false);
+                        } else if (chatId != 0) {
+                            String label = ChatObject.isChannel(currentChat) ? "Channel ID" : "Chat ID";
+                            detailCell.setTextAndValue(String.valueOf(chatId), label, false);
+                        }
+                    } else if (position == sanjiChannelLinkRow) {
+                        // Sanji Gram: copy channel link.
+                        if (currentChat != null && !TextUtils.isEmpty(currentChat.username)) {
+                            detailCell.setTextAndValue("https://t.me/" + currentChat.username, "Channel Link", false);
+                        }
+                    } else if (position == sanjiMsgCountRow) {
+                        // Sanji Gram: total message count (loaded async).
+                        long did = userId != 0 ? userId : (chatId != 0 ? -chatId : dialogId);
+                        detailCell.setTextAndValue("Loading...", "Messages", false);
+                        getMessagesStorage().getMessagesCount(did, count -> AndroidUtilities.runOnUIThread(() -> {
+                            if (listView == null || sanjiMsgCountRow == -1) {
+                                return;
+                            }
+                            RecyclerListView.Holder holder = (RecyclerListView.Holder) listView.findViewHolderForPosition(sanjiMsgCountRow);
+                            if (holder != null && holder.itemView instanceof TextDetailCell) {
+                                ((TextDetailCell) holder.itemView).setTextAndValue(String.valueOf(count), "Messages", false);
+                            }
+                        }));
+                    } else if (position == sanjiLockRow) {
+                        // Sanji Gram: chat lock state.
+                        long did = userId != 0 ? userId : (chatId != 0 ? -chatId : dialogId);
+                        boolean locked = SanjiGramConfig.isChatLocked(did);
+                        detailCell.setTextAndValue(locked ? "Locked" : "Unlocked", "Chat Lock", false);
+                    } else if (position == sanjiExportRow) {
+                        // Sanji Gram: export chat to .txt.
+                        detailCell.setTextAndValue("Save as .txt", "Export Chat", false);
+                    } else if (position == sanjiDownloadAllRow) {
+                        // Sanji Gram: download all media.
+                        detailCell.setTextAndValue("Download photos & videos", "Download All Media", false);
                     }
                     if (containsGift) {
                         Drawable drawable = ContextCompat.getDrawable(detailCell.getContext(), R.drawable.msg_input_gift);
@@ -14315,6 +14569,9 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
                     position == numberSectionRow || position == helpHeaderRow || position == debugHeaderRow || position == botPermissionsHeader) {
                 return VIEW_TYPE_HEADER;
             } else if (position == phoneRow || position == locationRow || position == numberRow || position == birthdayRow) {
+                return VIEW_TYPE_TEXT_DETAIL;
+            } else if (position == sanjiIdRow || position == sanjiChannelLinkRow || position == sanjiDownloadAllRow || position == sanjiExportRow || position == sanjiMsgCountRow || position == sanjiLockRow) {
+                // Sanji Gram rows use the standard detail cell.
                 return VIEW_TYPE_TEXT_DETAIL;
             } else if (position == usernameRow || position == setUsernameRow) {
                 return VIEW_TYPE_TEXT_DETAIL_MULTILINE;
@@ -15718,6 +15975,13 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
             put(++pointer, userInfoRow, sparseIntArray);
             put(++pointer, channelInfoRow, sparseIntArray);
             put(++pointer, usernameRow, sparseIntArray);
+            // Sanji Gram rows.
+            put(++pointer, sanjiIdRow, sparseIntArray);
+            put(++pointer, sanjiChannelLinkRow, sparseIntArray);
+            put(++pointer, sanjiDownloadAllRow, sparseIntArray);
+            put(++pointer, sanjiExportRow, sparseIntArray);
+            put(++pointer, sanjiMsgCountRow, sparseIntArray);
+            put(++pointer, sanjiLockRow, sparseIntArray);
             put(++pointer, notificationsDividerRow, sparseIntArray);
             put(++pointer, reportDividerRow, sparseIntArray);
             put(++pointer, notificationsRow, sparseIntArray);

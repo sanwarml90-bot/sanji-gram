@@ -90,6 +90,7 @@ import org.telegram.messenger.MessageObject;
 import org.telegram.messenger.MessagesController;
 import org.telegram.messenger.NotificationCenter;
 import org.telegram.messenger.R;
+import org.telegram.messenger.SanjiGramConfig;
 import org.telegram.messenger.SharedConfig;
 import org.telegram.messenger.SvgHelper;
 import org.telegram.messenger.UserConfig;
@@ -8421,6 +8422,21 @@ public class Theme {
     public static void applyChatTheme(boolean fontsOnly, boolean bg) {
         if (chat_msgTextPaint == null) {
             return;
+        }
+
+        // Sanji Gram: Custom Font — apply the chosen typeface to message text.
+        android.graphics.Typeface customFont = SanjiGramConfig.getCustomTypeface();
+        if (customFont != null) {
+            chat_msgTextPaint.setTypeface(customFont);
+            chat_replyTextPaint.setTypeface(customFont);
+            chat_quoteTextPaint.setTypeface(customFont);
+            if (chat_msgTextPaintEmoji != null) {
+                for (int i = 0; i < chat_msgTextPaintEmoji.length; i++) {
+                    if (chat_msgTextPaintEmoji[i] != null) {
+                        chat_msgTextPaintEmoji[i].setTypeface(customFont);
+                    }
+                }
+            }
         }
 
         if (chat_msgInDrawable != null && !fontsOnly) {

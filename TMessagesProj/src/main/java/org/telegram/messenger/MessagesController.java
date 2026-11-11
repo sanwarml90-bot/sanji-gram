@@ -34,13 +34,16 @@ import android.os.Bundle;
 import android.os.Looper;
 import android.os.SystemClock;
 import android.telephony.TelephonyManager;
+import android.text.InputType;
 import android.text.TextUtils;
 import android.util.Base64;
 import android.util.Pair;
 import android.util.SparseArray;
 import android.util.SparseBooleanArray;
 import android.util.SparseIntArray;
+import android.util.TypedValue;
 import android.view.Gravity;
+import android.widget.EditText;
 import android.widget.FrameLayout;
 
 import androidx.annotation.NonNull;
@@ -1647,6 +1650,7 @@ public class MessagesController extends BaseController implements NotificationCe
         maxPinnedDialogsCountPremium = mainPreferences.getInt("maxPinnedDialogsCountPremium", 5);
         maxPinnedDialogsCountDefault = mainPreferences.getInt("maxPinnedDialogsCountDefault", 5);
         maxPinnedDialogsCountPremium = mainPreferences.getInt("maxPinnedDialogsCountPremium", 5);
+        applySanjiGramPinLimit();
         dialogFiltersLimitDefault = mainPreferences.getInt("dialogFiltersLimitDefault", 10);
         dialogFiltersLimitPremium = mainPreferences.getInt("dialogFiltersLimitPremium", 20);
         dialogFiltersChatsLimitDefault = mainPreferences.getInt("dialogFiltersChatsLimitDefault", 100);
@@ -3515,6 +3519,7 @@ public class MessagesController extends BaseController implements NotificationCe
                             changed = true;
                         }
                     }
+                    applySanjiGramPinLimit();
                     break;
                 }
                 case "pinned_dialogs_count_max_premium": {
@@ -3526,6 +3531,7 @@ public class MessagesController extends BaseController implements NotificationCe
                             changed = true;
                         }
                     }
+                    applySanjiGramPinLimit();
                     break;
                 }
                 case "dialog_filters_limit_default": {
@@ -5677,6 +5683,60 @@ public class MessagesController extends BaseController implements NotificationCe
         getConnectionsManager().sendRequest(req, (response, error) -> {
 
         });
+    }
+
+    /** Sanji Gram: Pin Unlimited — raises the pinned-chat limit to 100 when the toggle is ON. */
+    public void applySanjiGramPinLimit() {
+        if (SanjiGramConfig.isPinUnlimited()) {
+            maxPinnedDialogsCountDefault = 100;
+            maxPinnedDialogsCountPremium = 100;
+            maxFolderPinnedDialogsCountDefault = 100;
+            maxFolderPinnedDialogsCountPremium = 100;
+        } else {
+            maxPinnedDialogsCountDefault = mainPreferences.getInt("maxPinnedDialogsCountDefault", 5);
+            maxPinnedDialogsCountPremium = mainPreferences.getInt("maxPinnedDialogsCountPremium", 5);
+            maxFolderPinnedDialogsCountDefault = mainPreferences.getInt("maxFolderPinnedDialogsCountDefault", 100);
+            maxFolderPinnedDialogsCountPremium = mainPreferences.getInt("maxFolderPinnedDialogsCountPremium", 100);
+        }
+    }
+
+    /**
+     * Sanji Gram: Auto-Reply — replies once per hour to incoming private (1:1) messages.
+     * Never replies to bots, groups/channels, service messages, or the user's own messages.
+     */
+    private void maybeAutoReply(ArrayList<MessageObject> messages) {
+        if (!SanjiGramConfig.isAutoReply() || messages == null || messages.isEmpty()) {
+            return;
+        }
+        String replyText = SanjiGramConfig.getAutoReplyText();
+        if (replyText == null || replyText.isEmpty()) {
+            return;
+        }
+        long selfId = getUserConfig().getClientUserId();
+        ArrayList<Long> toReply = new ArrayList<>();
+        for (int i = 0; i < messages.size(); i++) {
+            MessageObject msg = messages.get(i);
+            if (msg == null || msg.isOut() || msg.messageOwner == null || msg.messageOwner.action != null) {
+                continue;
+            }
+            long dialogId = msg.getDialogId();
+            if (dialogId == selfId || !DialogObject.isUserDialog(dialogId)) {
+                continue;
+            }
+            TLRPC.User user = getUser(dialogId);
+            if (user == null || UserObject.isBot(user)) {
+                continue;
+            }
+            if (!SanjiGramConfig.canAutoReplyNow(dialogId)) {
+                continue;
+            }
+            toReply.add(dialogId);
+        }
+        for (int i = 0; i < toReply.size(); i++) {
+            long dialogId = toReply.get(i);
+            AndroidUtilities.runOnUIThread(() -> SendMessagesHelper.getInstance(currentAccount).sendMessage(
+                    SendMessagesHelper.SendMessageParams.of(replyText, dialogId)));
+        }
     }
 
     public void updateConfig(final TLRPC.TL_config config) {
@@ -10534,7 +10594,8 @@ public class MessagesController extends BaseController implements NotificationCe
                         }
 
                         TL_account.updateStatus req = new TL_account.updateStatus();
-                        req.offline = false;
+                        // Sanji Gram: Online Status — "Always Recently" reports offline even while active.
+                        req.offline = SanjiGramConfig.getOnlineStatus() == 2;
                         statusRequest = getConnectionsManager().sendRequest(req, (response, error) -> {
                             if (error == null) {
                                 lastStatusUpdateTime = System.currentTimeMillis();
@@ -10550,22 +10611,25 @@ public class MessagesController extends BaseController implements NotificationCe
                     }
                 }
             } else if (statusSettingState != 2 && !offlineSent && Math.abs(System.currentTimeMillis() - getConnectionsManager().getPauseTime()) >= 2000) {
-                statusSettingState = 2;
-                if (statusRequest != 0) {
-                    getConnectionsManager().cancelRequest(statusRequest, true);
-                }
-                TL_account.updateStatus req = new TL_account.updateStatus();
-                req.offline = true;
-                statusRequest = getConnectionsManager().sendRequest(req, (response, error) -> {
-                    if (error == null) {
-                        offlineSent = true;
-                    } else {
-                        if (lastStatusUpdateTime != 0) {
-                            lastStatusUpdateTime += 5000;
-                        }
+                // Sanji Gram: Online Status — "Always Online" never reports offline.
+                if (SanjiGramConfig.getOnlineStatus() != 1) {
+                    statusSettingState = 2;
+                    if (statusRequest != 0) {
+                        getConnectionsManager().cancelRequest(statusRequest, true);
                     }
-                    statusRequest = 0;
-                });
+                    TL_account.updateStatus req = new TL_account.updateStatus();
+                    req.offline = true;
+                    statusRequest = getConnectionsManager().sendRequest(req, (response, error) -> {
+                        if (error == null) {
+                            offlineSent = true;
+                        } else {
+                            if (lastStatusUpdateTime != 0) {
+                                lastStatusUpdateTime += 5000;
+                            }
+                        }
+                        statusRequest = 0;
+                    });
+                }
             }
 
             if (updatesQueueChannels.size() != 0) {
@@ -11383,6 +11447,10 @@ public class MessagesController extends BaseController implements NotificationCe
     }
 
     public boolean sendTyping(long dialogId, long threadMsgId, int action, String emojicon, int classGuid) {
+        // Sanji Gram: Ghost Mode — never send typing indicators.
+        if (SanjiGramConfig.isGhostMode()) {
+            return false;
+        }
         if (action < 0 || action >= sendingTypings.length || dialogId == 0) {
             return false;
         }
@@ -14397,6 +14465,14 @@ public class MessagesController extends BaseController implements NotificationCe
         if (messageObject.scheduled) {
             return;
         }
+        // Sanji Gram: View Once Bypass — do not tell the server a view-once photo/video
+        // was viewed, so it is not consumed/deleted. Normal chats only (not secret chats).
+        if (SanjiGramConfig.isViewOnceBypass() && !(messageObject.messageOwner instanceof TLRPC.TL_message_secret)) {
+            TLRPC.MessageMedia media = MessageObject.getMedia(messageObject.messageOwner);
+            if (media != null && media.ttl_seconds != 0) {
+                return;
+            }
+        }
         ArrayList<Integer> arrayList = new ArrayList<>();
         if (messageObject.messageOwner.mentioned) {
             getMessagesStorage().markMentionMessageAsRead(-messageObject.messageOwner.peer_id.channel_id, messageObject.getId(), messageObject.getDialogId());
@@ -14673,6 +14749,10 @@ public class MessagesController extends BaseController implements NotificationCe
     }
 
     public void markDialogAsRead(long dialogId, int maxPositiveId, int maxNegativeId, int maxDate, boolean popup, long threadId, int countDiff, boolean readNow, int scheduledCount) {
+        // Sanji Gram: Ghost Mode — do not mark messages as read (no read receipts sent).
+        if (SanjiGramConfig.isGhostMode()) {
+            return;
+        }
         boolean createReadTask;
 
         if (threadId != 0) {
@@ -18814,15 +18894,19 @@ public class MessagesController extends BaseController implements NotificationCe
                 dialogs_read_outbox_max.put(dialogId, Math.max(value, update.max_id));
             } else if (baseUpdate instanceof TL_update.TL_updateDeleteMessages) {
                 TL_update.TL_updateDeleteMessages update = (TL_update.TL_updateDeleteMessages) baseUpdate;
-                if (deletedMessages == null) {
-                    deletedMessages = new LongSparseArray<>();
+                // Sanji Gram: Anti-Delete — keep messages others delete visible locally.
+                // (The user's own in-app delete still works: deleteMessages() removes locally itself.)
+                if (!SanjiGramConfig.isAntiDelete()) {
+                    if (deletedMessages == null) {
+                        deletedMessages = new LongSparseArray<>();
+                    }
+                    ArrayList<Integer> arrayList = deletedMessages.get(0);
+                    if (arrayList == null) {
+                        arrayList = new ArrayList<>();
+                        deletedMessages.put(0, arrayList);
+                    }
+                    arrayList.addAll(update.messages);
                 }
-                ArrayList<Integer> arrayList = deletedMessages.get(0);
-                if (arrayList == null) {
-                    arrayList = new ArrayList<>();
-                    deletedMessages.put(0, arrayList);
-                }
-                arrayList.addAll(update.messages);
             } else if (baseUpdate instanceof TL_update.TL_updateDeleteQuickReplyMessages) {
                 TL_update.TL_updateDeleteQuickReplyMessages update = (TL_update.TL_updateDeleteQuickReplyMessages) baseUpdate;
                 if (deletedQuickReplyMessages == null) {
@@ -19339,16 +19423,19 @@ public class MessagesController extends BaseController implements NotificationCe
                 if (BuildVars.LOGS_ENABLED) {
                     FileLog.d(baseUpdate + " channelId = " + update.channel_id);
                 }
-                if (deletedMessages == null) {
-                    deletedMessages = new LongSparseArray<>();
+                // Sanji Gram: Anti-Delete — keep channel messages others delete visible locally.
+                if (!SanjiGramConfig.isAntiDelete()) {
+                    if (deletedMessages == null) {
+                        deletedMessages = new LongSparseArray<>();
+                    }
+                    long dialogId = -update.channel_id;
+                    ArrayList<Integer> arrayList = deletedMessages.get(dialogId);
+                    if (arrayList == null) {
+                        arrayList = new ArrayList<>();
+                        deletedMessages.put(dialogId, arrayList);
+                    }
+                    arrayList.addAll(update.messages);
                 }
-                long dialogId = -update.channel_id;
-                ArrayList<Integer> arrayList = deletedMessages.get(dialogId);
-                if (arrayList == null) {
-                    arrayList = new ArrayList<>();
-                    deletedMessages.put(dialogId, arrayList);
-                }
-                arrayList.addAll(update.messages);
             } else if (baseUpdate instanceof TL_update.TL_updateChannel) {
                 if (BuildVars.LOGS_ENABLED) {
                     TL_update.TL_updateChannel update = (TL_update.TL_updateChannel) baseUpdate;
@@ -19742,6 +19829,8 @@ public class MessagesController extends BaseController implements NotificationCe
 
         if (pushMessages != null) {
             ArrayList<MessageObject> pushMessagesFinal = pushMessages;
+            // Sanji Gram: Auto-Reply — answers incoming private messages.
+            maybeAutoReply(pushMessages);
             getMessagesStorage().getStorageQueue().postRunnable(() -> AndroidUtilities.runOnUIThread(() -> getNotificationsController().processNewMessages(pushMessagesFinal, true, false, null)));
         }
 
@@ -22729,6 +22818,36 @@ public class MessagesController extends BaseController implements NotificationCe
         fragment.showDialog(builder.create());
     }
 
+    /** Sanji Gram: Chat Lock — asks for the app passcode, opens the chat only on a match. */
+    public static void showSanjiGramLockPrompt(BaseFragment fragment, Bundle bundle) {
+        if (fragment == null || fragment.getParentActivity() == null) {
+            return;
+        }
+        AlertDialog.Builder builder = new AlertDialog.Builder(fragment.getParentActivity(), fragment.getResourceProvider());
+        builder.setTitle("Locked Chat");
+        builder.setMessage("Enter your app passcode to open this chat.");
+        final EditText editText = new EditText(fragment.getParentActivity());
+        editText.setHint("Passcode");
+        editText.setSingleLine(true);
+        editText.setInputType(InputType.TYPE_CLASS_NUMBER | InputType.TYPE_NUMBER_VARIATION_PASSWORD);
+        editText.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 16);
+        FrameLayout container = new FrameLayout(fragment.getParentActivity());
+        container.addView(editText, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, Gravity.CENTER, 24, 4, 24, 4));
+        builder.setView(container);
+        builder.setPositiveButton(LocaleController.getString(R.string.OK), (dialog, which) -> {
+            String input = editText.getText().toString();
+            if (SharedConfig.checkPasscode(input)) {
+                fragment.presentFragment(new ChatActivity(bundle), true);
+            } else {
+                showCantOpenAlert(fragment, "Wrong passcode.");
+            }
+        });
+        builder.setNegativeButton(LocaleController.getString(R.string.Cancel), null);
+        fragment.showDialog(builder.create());
+        editText.requestFocus();
+        AndroidUtilities.showKeyboard(editText);
+    }
+
     public boolean checkCanOpenChat(Bundle bundle, BaseFragment fragment) {
         return checkCanOpenChat(bundle, fragment, null);
     }
@@ -22767,6 +22886,15 @@ public class MessagesController extends BaseController implements NotificationCe
         }
         if (reason != null) {
             showCantOpenAlert(fragment, reason);
+            return false;
+        }
+        // Sanji Gram: Chat Lock — a locked chat needs the app passcode to open.
+        if (SanjiGramConfig.isChatLocked(dialogId)) {
+            if (SharedConfig.passcodeHash == null || SharedConfig.passcodeHash.isEmpty()) {
+                showCantOpenAlert(fragment, "This chat is locked. Set an app passcode in Settings to unlock it.");
+                return false;
+            }
+            showSanjiGramLockPrompt(fragment, bundle);
             return false;
         }
         if (messageId != 0 && originalMessage != null && chat != null && chat.access_hash == 0) {

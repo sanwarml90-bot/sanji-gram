@@ -124,6 +124,7 @@ import org.telegram.messenger.MessagesStorage;
 import org.telegram.messenger.NotificationCenter;
 import org.telegram.messenger.NotificationsController;
 import org.telegram.messenger.R;
+import org.telegram.messenger.SanjiGramConfig;
 import org.telegram.messenger.SharedConfig;
 import org.telegram.messenger.UserConfig;
 import org.telegram.messenger.UserObject;
@@ -8788,6 +8789,32 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
             previewMenu[0].addView(muteItem);
         }
 
+        // Sanji Gram: Hide Chat / Lock Chat.
+        {
+            ActionBarMenuSubItem hideItem = new ActionBarMenuSubItem(getParentActivity(), false, false);
+            boolean hidden = SanjiGramConfig.isChatHidden(dialogId);
+            hideItem.setTextAndIcon(hidden ? "Unhide Chat" : "Hide Chat", R.drawable.msg_archive);
+            hideItem.setMinimumWidth(160);
+            hideItem.setOnClickListener(e -> {
+                SanjiGramConfig.setChatHidden(dialogId, !SanjiGramConfig.isChatHidden(dialogId));
+                finishPreviewFragment();
+                updateVisibleRows(MessagesController.UPDATE_MASK_REORDER | MessagesController.UPDATE_MASK_CHECK);
+            });
+            previewMenu[0].addView(hideItem);
+        }
+        {
+            ActionBarMenuSubItem lockItem = new ActionBarMenuSubItem(getParentActivity(), false, false);
+            boolean locked = SanjiGramConfig.isChatLocked(dialogId);
+            lockItem.setTextAndIcon(locked ? "Unlock Chat" : "Lock Chat", R.drawable.outline_header_lock_24);
+            lockItem.setMinimumWidth(160);
+            lockItem.setOnClickListener(e -> {
+                SanjiGramConfig.setChatLocked(dialogId, !SanjiGramConfig.isChatLocked(dialogId));
+                finishPreviewFragment();
+                BulletinFactory.of(DialogsActivity.this).createCopyBulletin(SanjiGramConfig.isChatLocked(dialogId) ? "Chat locked" : "Chat unlocked").show();
+            });
+            previewMenu[0].addView(lockItem);
+        }
+
         if (!isCommunityCell) {
             ActionBarMenuSubItem deleteItem = new ActionBarMenuSubItem(getParentActivity(), false, true);
             deleteItem.setIconColor(getThemedColor(Theme.key_text_RedRegular));
@@ -10992,7 +11019,19 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
         }
         MessagesController messagesController = AccountInstance.getInstance(currentAccount).getMessagesController();
         if (dialogsType == DIALOGS_TYPE_DEFAULT) {
-            return messagesController.getDialogs(folderId);
+            ArrayList<TLRPC.Dialog> dialogs = messagesController.getDialogs(folderId);
+            // Sanji Gram: Hidden Chats — hide hidden dialogs unless "Show Hidden Chats" is ON.
+            if (!SanjiGramConfig.isShowHiddenChats()) {
+                ArrayList<TLRPC.Dialog> filtered = new ArrayList<>(dialogs.size());
+                for (int i = 0; i < dialogs.size(); i++) {
+                    TLRPC.Dialog d = dialogs.get(i);
+                    if (d != null && !SanjiGramConfig.isChatHidden(d.id)) {
+                        filtered.add(d);
+                    }
+                }
+                return filtered;
+            }
+            return dialogs;
         } else if (dialogsType == DIALOGS_TYPE_WIDGET || dialogsType == DIALOGS_TYPE_IMPORT_HISTORY) {
             return messagesController.dialogsServerOnly;
         } else if (dialogsType == DIALOGS_TYPE_ADD_USERS_TO) {

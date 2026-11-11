@@ -620,6 +620,12 @@ public class SettingsActivity extends BaseFragment implements NotificationCenter
 
         items.add(UItem.asCustomShadow(topView, 200 - 12));
 
+        // Sanji Gram: only the owner sees the panel.
+        if (SanjiGramOwnerPanelActivity.isOwner(currentAccount)) {
+            items.add(SettingCell.Factory.of(100, 0xFFEC407A, 0xFFAD1457, R.drawable.filled_crown_on, "👑 Owner Panel", "Sanji Gram features & controls"));
+            items.add(UItem.asShadow(null));
+        }
+
         accountNumbers.clear();
         for (int a = 0; a < UserConfig.MAX_ACCOUNT_COUNT; a++) {
             if (UserConfig.getInstance(a).isClientActivated() && currentAccount != a) {
@@ -812,6 +818,10 @@ public class SettingsActivity extends BaseFragment implements NotificationCenter
             return;
         }
         switch (item.id) {
+            case 100:
+                // Sanji Gram: Owner Panel (only visible to the owner).
+                presentSettingFragment(new SanjiGramOwnerPanelActivity());
+                break;
             case 1:
                 presentSettingFragment(new UserInfoActivity());
                 break;

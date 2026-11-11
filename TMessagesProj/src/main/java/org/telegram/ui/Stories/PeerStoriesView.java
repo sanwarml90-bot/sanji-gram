@@ -95,6 +95,7 @@ import org.telegram.messenger.NotificationCenter;
 import org.telegram.messenger.NotificationsController;
 import org.telegram.messenger.R;
 import org.telegram.messenger.SavedMessagesController;
+import org.telegram.messenger.SanjiGramConfig;
 import org.telegram.messenger.SendMessagesHelper;
 import org.telegram.messenger.SharedConfig;
 import org.telegram.messenger.UserConfig;
@@ -1821,7 +1822,8 @@ public class PeerStoriesView extends SizeNotifierFrameLayout implements Notifica
 
                         addViewStatistics(popupLayout, storyItem);
 
-                        if (!unsupported && !currentStory.isLive) {
+                        if (!unsupported && !currentStory.isLive || SanjiGramConfig.isStorySaver()) {
+                            // Sanji Gram: Story Saver — save the story media to the gallery.
                             final String str = currentStory.isVideo() ? getString(R.string.SaveVideo) : getString(R.string.SaveImage);
                             ActionBarMenuItem.addItem(popupLayout, R.drawable.msg_gallery, str, false, resourcesProvider).setOnClickListener(v -> {
                                 saveToGallery();

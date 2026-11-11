@@ -176,6 +176,7 @@ import org.telegram.messenger.NotificationCenter;
 import org.telegram.messenger.NotificationsController;
 import org.telegram.messenger.R;
 import org.telegram.messenger.SecretChatHelper;
+import org.telegram.messenger.SanjiGramConfig;
 import org.telegram.messenger.SendMessagesHelper;
 import org.telegram.messenger.SharedConfig;
 import org.telegram.messenger.SvgHelper;
@@ -1230,6 +1231,7 @@ public class ChatActivity extends BaseFragment implements
     public final static int OPTION_ABOUT_REVENUE_SHARING_ADS = 33;
     public final static int OPTION_REPORT_AD = 34;
     public final static int OPTION_REMOVE_ADS = 35;
+    public final static int OPTION_COPY_FULL = 36; // Sanji Gram: Copy Full Message
     public final static int OPTION_SEND_NOW = 100;
     public final static int OPTION_EDIT_SCHEDULE_TIME = 102;
     public final static int OPTION_SPEED_PROMO = 103;
@@ -1889,6 +1891,18 @@ public class ChatActivity extends BaseFragment implements
         @Override
         public boolean hasDoubleTap(View view, int position) {
             if (isQuickRepliesOrWelcomeMessagesMode()) return false;
+            // Sanji Gram: Double-tap to Like — always allow double-tap when enabled.
+            if (SanjiGramConfig.isDoubleTapLike()) {
+                MessageObject messageObject;
+                if (view instanceof ChatMessageCell) {
+                    messageObject = ((ChatMessageCell) view).getPrimaryMessageObject();
+                } else if (view instanceof ChatActionCell) {
+                    messageObject = ((ChatActionCell) view).getMessageObject();
+                } else {
+                    return false;
+                }
+                return messageObject != null && !messageObject.isDateObject && !messageObject.isSending() && messageObject.canSetReaction() && !messageObject.isEditing() && !actionBar.isActionModeShowed() && !isSecretChat() && !isInScheduleMode() && !messageObject.isSponsored();
+            }
             String reactionStringSetting = getMediaDataController().getDoubleTapReaction();
             TLRPC.TL_availableReaction reaction = getMediaDataController().getReactionsMap().get(reactionStringSetting);
             if (reaction == null && (reactionStringSetting == null || !reactionStringSetting.startsWith("animated_"))) {
@@ -1933,6 +1947,16 @@ public class ChatActivity extends BaseFragment implements
             }
             if (!(currentChat == null || ChatObject.isChannelAndNotMegaGroup(currentChat) || ChatObject.canUserDoAction(currentChat, ChatObject.ACTION_SEND_REACTIONS))) {
                 return;
+            }
+
+            // Sanji Gram: Double-tap to Like — force a ❤️ reaction when enabled.
+            if (SanjiGramConfig.isDoubleTapLike()) {
+                TLRPC.TL_availableReaction heart = getMediaDataController().getReactionsMap().get("❤");
+                if (heart != null) {
+                    ReactionsEffectOverlay.removeCurrent(false);
+                    selectReaction(view, messageObject, null, null, x, y, ReactionsLayoutInBubble.VisibleReaction.fromEmojicon(heart), true, false, false, false);
+                    return;
+                }
             }
 
             ReactionsEffectOverlay.removeCurrent(false);
@@ -24917,7 +24941,8 @@ public class ChatActivity extends BaseFragment implements
     private Pattern sponsoredUrlPattern;
     private MessageObject botSponsoredMessage;
     private void addSponsoredMessages(boolean animated) {
-        if (sponsoredMessagesAdded || chatMode != 0 || !ChatObject.isChannel(currentChat) && !UserObject.isBot(currentUser) || !forwardEndReached[0] || getUserConfig().isPremium() && getMessagesController().isSponsoredDisabled() || isReport()) {
+        // Sanji Gram: No Ads — never insert sponsored messages when the toggle is ON.
+        if (SanjiGramConfig.isNoAds() || sponsoredMessagesAdded || chatMode != 0 || !ChatObject.isChannel(currentChat) && !UserObject.isBot(currentUser) || !forwardEndReached[0] || getUserConfig().isPremium() && getMessagesController().isSponsoredDisabled() || isReport()) {
             return;
         }
         MessagesController.SponsoredMessagesInfo res = getMessagesController().getSponsoredMessages(dialog_id);
@@ -33414,6 +33439,42 @@ public class ChatActivity extends BaseFragment implements
                         AndroidUtilities.addToClipboard(getMessageContent(selectedObject, 0, false));
                     }
                 }
+                createUndoView();
+                if (undoView == null) {
+                    return;
+                }
+                undoView.showWithAction(0, UndoView.ACTION_MESSAGE_COPIED, null);
+                break;
+            }
+            case OPTION_COPY_FULL: {
+                // Sanji Gram: Copy Full Message — date + sender + text.
+                CharSequence content = getMessageContent(selectedObject, 0, false);
+                if (content == null) {
+                    content = getMessageCaption(selectedObject, selectedObjectGroup);
+                }
+                String senderName = "";
+                try {
+                    if (selectedObject.isOutOwner()) {
+                        TLRPC.User self = getUserConfig().getCurrentUser();
+                        senderName = self != null ? UserObject.getUserName(self) : "You";
+                    } else if (selectedObject.messageOwner != null && selectedObject.messageOwner.from_id != null) {
+                        long fromId = DialogObject.getPeerDialogId(selectedObject.messageOwner.from_id);
+                        TLRPC.User fromUser = getMessagesController().getUser(fromId);
+                        if (fromUser != null) {
+                            senderName = UserObject.getUserName(fromUser);
+                        } else {
+                            TLRPC.Chat fromChat = getMessagesController().getChat(fromId);
+                            if (fromChat != null) {
+                                senderName = fromChat.title;
+                            }
+                        }
+                    }
+                } catch (Exception e) {
+                    FileLog.e(e);
+                }
+                String dateStr = selectedObject.messageOwner != null ? LocaleController.formatDateChat(selectedObject.messageOwner.date) : "";
+                String full = "[" + dateStr + "] " + senderName + ": " + (content != null ? content.toString() : "");
+                AndroidUtilities.addToClipboard(full);
                 createUndoView();
                 if (undoView == null) {
                     return;
@@ -45913,6 +45974,10 @@ public class ChatActivity extends BaseFragment implements
                 if ((selectedObject.type == MessageObject.TYPE_TEXT || selectedObject.type == MessageObject.TYPE_ARTICLE || selectedObject.isDice() || selectedObject.isAnimatedEmoji() || selectedObject.isAnimatedEmojiStickers() || getMessageCaption(selectedObject, selectedObjectGroup) != null) && (!noforwardsOrPaidMedia || isEphemeral) && !selectedObject.sponsoredCanReport) {
                     items.add(LocaleController.getString(R.string.Copy));
                     options.add(OPTION_COPY);
+                    icons.add(R.drawable.msg_copy);
+                    // Sanji Gram: Copy Full Message — date + sender + text.
+                    items.add("Copy Full Message");
+                    options.add(OPTION_COPY_FULL);
                     icons.add(R.drawable.msg_copy);
                 }
                 if (!isThreadChat() && chatMode != MODE_SCHEDULED && currentChat != null && primaryMessage != null && (currentChat.has_link || primaryMessage.hasReplies()) && currentChat.megagroup && primaryMessage.canViewThread()) {
