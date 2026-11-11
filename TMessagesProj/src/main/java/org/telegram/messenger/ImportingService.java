@@ -59,6 +59,11 @@ public class ImportingService extends Service implements NotificationCenter.Noti
 
     private boolean hasImportingHistory() {
         for (int a = 0; a < UserConfig.MAX_ACCOUNT_COUNT; a++) {
+            // Sanji Gram: lazy account init — an account that was never
+            // logged into cannot be importing anything.
+            if (!UserConfig.getInstance(a).isClientActivated()) {
+                continue;
+            }
             if (SendMessagesHelper.getInstance(a).isImportingHistory()) {
                 return true;
             }
@@ -68,6 +73,10 @@ public class ImportingService extends Service implements NotificationCenter.Noti
 
     private boolean hasImportingStickers() {
         for (int a = 0; a < UserConfig.MAX_ACCOUNT_COUNT; a++) {
+            // Sanji Gram: lazy account init — see hasImportingHistory.
+            if (!UserConfig.getInstance(a).isClientActivated()) {
+                continue;
+            }
             if (SendMessagesHelper.getInstance(a).isImportingStickers()) {
                 return true;
             }

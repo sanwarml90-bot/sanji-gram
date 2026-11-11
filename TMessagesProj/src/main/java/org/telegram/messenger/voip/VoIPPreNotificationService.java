@@ -591,6 +591,12 @@ public class VoIPPreNotificationService { // } extends Service implements AudioM
         stopRinging();
         if (!answered) {
             for (int i = 0; i < UserConfig.MAX_ACCOUNT_COUNT; ++i) {
+                // Sanji Gram: lazy account init — don't create a heavy
+                // MessagesController just to reset a flag on an account
+                // that was never logged into.
+                if (!UserConfig.getInstance(i).isClientActivated()) {
+                    continue;
+                }
                 MessagesController.getInstance(i).ignoreSetOnline = false;
             }
             AndroidUtilities.runOnUIThread(() -> {

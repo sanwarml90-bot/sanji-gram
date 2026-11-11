@@ -206,6 +206,13 @@ public class SanjiGramConfig {
 
     // ---------- Per-chat sets (dialog ids stored as strings) ----------
 
+    // Sanji Gram: getStringSet() + a full set copy per dialog on the UI
+    // thread made the chat list lag (getDialogsArray / tab badges run on
+    // every refresh). Cache the sets in memory; writers replace the cached
+    // reference after persisting, so readers never touch SharedPreferences.
+    private static volatile java.util.Set<String> hiddenChatsCache;
+    private static volatile java.util.Set<String> lockedChatsCache;
+
     private static LinkedHashSet<String> getDialogIdSet(String key) {
         Set<String> stored = prefs().getStringSet(key, null);
         return stored == null ? new LinkedHashSet<>() : new LinkedHashSet<>(stored);
@@ -217,7 +224,12 @@ public class SanjiGramConfig {
 
     /** Locked chats (Chat Lock). */
     public static boolean isChatLocked(long dialogId) {
-        return getDialogIdSet("locked_chats").contains(String.valueOf(dialogId));
+        java.util.Set<String> cached = lockedChatsCache;
+        if (cached == null) {
+            cached = getDialogIdSet("locked_chats");
+            lockedChatsCache = cached;
+        }
+        return cached.contains(String.valueOf(dialogId));
     }
 
     public static void setChatLocked(long dialogId, boolean locked) {
@@ -228,11 +240,17 @@ public class SanjiGramConfig {
             set.remove(String.valueOf(dialogId));
         }
         putDialogIdSet("locked_chats", set);
+        lockedChatsCache = set;
     }
 
     /** Hidden chats (Hidden Chats). */
     public static boolean isChatHidden(long dialogId) {
-        return getDialogIdSet("hidden_chats").contains(String.valueOf(dialogId));
+        java.util.Set<String> cached = hiddenChatsCache;
+        if (cached == null) {
+            cached = getDialogIdSet("hidden_chats");
+            hiddenChatsCache = cached;
+        }
+        return cached.contains(String.valueOf(dialogId));
     }
 
     public static void setChatHidden(long dialogId, boolean hidden) {
@@ -243,6 +261,7 @@ public class SanjiGramConfig {
             set.remove(String.valueOf(dialogId));
         }
         putDialogIdSet("hidden_chats", set);
+        hiddenChatsCache = set;
     }
 
     /** Auto-Reply rate limit: last reply time (ms) per dialog id, kept in-memory only. */

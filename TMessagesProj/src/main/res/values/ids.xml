@@ -65,4 +65,7 @@
 
     <item name="tag_view_on_post_draw_state" type="id" />
     <item name="tag_view_on_post_draw_root_state" type="id" />
+
+    <!-- Sanji Gram: keyed tag holding the dialog id on the message-count row cell. -->
+    <item name="sanji_msg_count_dialog_id" type="id" />
 </resources>

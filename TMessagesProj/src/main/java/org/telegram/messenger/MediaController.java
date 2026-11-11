@@ -1676,6 +1676,11 @@ public class MediaController implements AudioManager.OnAudioFocusChangeListener,
         audioInfo = null;
         playMusicAgain = false;
         for (int a = 0; a < UserConfig.MAX_ACCOUNT_COUNT; a++) {
+            // Sanji Gram: lazy account init — a DownloadController that was
+            // never created has nothing to clean up.
+            if (!UserConfig.getInstance(a).isClientActivated()) {
+                continue;
+            }
             DownloadController.getInstance(a).cleanup();
         }
         videoConvertQueue.clear();

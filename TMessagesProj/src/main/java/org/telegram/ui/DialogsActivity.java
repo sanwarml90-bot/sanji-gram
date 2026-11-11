@@ -58,7 +58,6 @@ import android.text.SpannableStringBuilder;
 import android.text.Spanned;
 import android.text.TextPaint;
 import android.text.TextUtils;
-import android.text.style.ImageSpan;
 import android.util.LongSparseArray;
 import android.util.Property;
 import android.util.StateSet;
@@ -3537,12 +3536,10 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
             } else {
                 statusDrawable = new AnimatedEmojiDrawable.SwapAnimatedEmojiDrawable(null, dp(26));
                 statusDrawable.center = true;
-                logoDrawable = context.getResources().getDrawable(R.drawable.telegram_logo_2).mutate();
-                logoDrawable.setBounds(0, dp(2), logoDrawable.getIntrinsicWidth(), dp(2) + logoDrawable.getIntrinsicHeight());
-                logoDrawable.setColorFilter(getThemedColor(Theme.key_telegram_color_dialogsLogo), PorterDuff.Mode.MULTIPLY);
-                SpannableStringBuilder ssb = new SpannableStringBuilder(getString(R.string.AppName));
-                ssb.setSpan(new ImageSpan(logoDrawable), 0, ssb.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
-                actionBar.setTitle(ssb, statusDrawable);
+                // Sanji Gram: the stock telegram_logo_2 drawable spells
+                // "Telegram" in letter paths. Show the "Sanji Gram" name as
+                // plain text instead of the wordmark image.
+                actionBar.setTitle(getString(R.string.AppName), statusDrawable);
                 updateStatus(UserConfig.getInstance(currentAccount).getCurrentUser(), false);
             }
             if (folderId == 0) {
@@ -11227,17 +11224,41 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
         int[] counts = new int[SANJI_GRAM_TABS_COUNT];
         ArrayList<TLRPC.Dialog> dialogs = getMessagesController().getDialogs(folderId);
         if (dialogs != null) {
+            // Sanji Gram: iterate a copy — getDialogs() returns the LIVE
+            // list, which another thread can modify mid-loop.
+            dialogs = new ArrayList<>(dialogs);
+            boolean showHidden = SanjiGramConfig.isShowHiddenChats();
             for (int i = 0; i < dialogs.size(); i++) {
                 TLRPC.Dialog d = dialogs.get(i);
                 if (d == null || d.unread_count <= 0 && !d.unread_mark) {
                     continue;
                 }
-                if (!SanjiGramConfig.isShowHiddenChats() && SanjiGramConfig.isChatHidden(d.id)) {
+                if (!showHidden && SanjiGramConfig.isChatHidden(d.id)) {
                     continue;
                 }
-                for (int tab = 0; tab < SANJI_GRAM_TABS_COUNT; tab++) {
-                    if (sanjiGramDialogMatchesTab(d, tab)) {
-                        counts[tab]++;
+                // Sanji Gram: classify each dialog ONCE in a single pass
+                // instead of one sanjiGramDialogMatchesTab() call per tab
+                // (which did up to 7 user/chat lookups per dialog).
+                counts[SANJI_GRAM_TAB_ALL]++;
+                counts[SANJI_GRAM_TAB_UNREAD]++;
+                if (d.pinned) {
+                    counts[SANJI_GRAM_TAB_PINNED]++;
+                }
+                if (DialogObject.isUserDialog(d.id)) {
+                    TLRPC.User user = getMessagesController().getUser(d.id);
+                    if (user != null && user.bot) {
+                        counts[SANJI_GRAM_TAB_BOTS]++;
+                    } else {
+                        counts[SANJI_GRAM_TAB_USERS]++;
+                    }
+                } else if (DialogObject.isChatDialog(d.id)) {
+                    TLRPC.Chat chat = getMessagesController().getChat(-d.id);
+                    if (chat != null) {
+                        if (ChatObject.isChannelAndNotMegaGroup(chat)) {
+                            counts[SANJI_GRAM_TAB_CHANNELS]++;
+                        } else {
+                            counts[SANJI_GRAM_TAB_GROUPS]++;
+                        }
                     }
                 }
             }
@@ -11278,9 +11299,12 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
             ArrayList<TLRPC.Dialog> dialogs = messagesController.getDialogs(folderId);
             // Sanji Gram: Hidden Chats — hide hidden dialogs unless "Show Hidden Chats" is ON.
             if (!SanjiGramConfig.isShowHiddenChats()) {
-                ArrayList<TLRPC.Dialog> filtered = new ArrayList<>(dialogs.size());
-                for (int i = 0; i < dialogs.size(); i++) {
-                    TLRPC.Dialog d = dialogs.get(i);
+                // Sanji Gram: iterate a copy — getDialogs() returns the LIVE
+                // list, which another thread can modify mid-loop.
+                ArrayList<TLRPC.Dialog> source = new ArrayList<>(dialogs);
+                ArrayList<TLRPC.Dialog> filtered = new ArrayList<>(source.size());
+                for (int i = 0; i < source.size(); i++) {
+                    TLRPC.Dialog d = source.get(i);
                     if (d != null && !SanjiGramConfig.isChatHidden(d.id)) {
                         filtered.add(d);
                     }
@@ -11289,9 +11313,11 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
             }
             // Sanji Gram: Plus-style filter tabs — only the main chat list (folder 0).
             if (folderId == 0 && sanjiGramTabFilter != SANJI_GRAM_TAB_ALL) {
-                ArrayList<TLRPC.Dialog> tabFiltered = new ArrayList<>(dialogs.size());
-                for (int i = 0; i < dialogs.size(); i++) {
-                    TLRPC.Dialog d = dialogs.get(i);
+                // Sanji Gram: iterate a copy — see above.
+                ArrayList<TLRPC.Dialog> source = new ArrayList<>(dialogs);
+                ArrayList<TLRPC.Dialog> tabFiltered = new ArrayList<>(source.size());
+                for (int i = 0; i < source.size(); i++) {
+                    TLRPC.Dialog d = source.get(i);
                     if (d != null && sanjiGramDialogMatchesTab(d, sanjiGramTabFilter)) {
                         tabFiltered.add(d);
                     }

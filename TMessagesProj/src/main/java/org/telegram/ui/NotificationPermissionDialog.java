@@ -130,6 +130,12 @@ public class NotificationPermissionDialog extends BottomSheet implements Notific
     public void updateCounter() {
         int counter = 0;
         for (int a = 0; a < UserConfig.MAX_ACCOUNT_COUNT; ++a) {
+            // Sanji Gram: lazy account init — MessagesStorage opens a
+            // SQLite DB; an account that was never logged into has no
+            // unread messages to count.
+            if (!UserConfig.getInstance(a).isClientActivated()) {
+                continue;
+            }
             MessagesStorage messagesStorage = MessagesStorage.getInstance(a);
             if (messagesStorage != null) {
                 counter += messagesStorage.getMainUnreadCount();

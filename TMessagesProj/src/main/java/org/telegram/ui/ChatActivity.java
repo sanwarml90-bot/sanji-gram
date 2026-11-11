@@ -1951,7 +1951,7 @@ public class ChatActivity extends BaseFragment implements
 
             // Sanji Gram: Double-tap to Like — force a ❤️ reaction when enabled.
             if (SanjiGramConfig.isDoubleTapLike()) {
-                TLRPC.TL_availableReaction heart = getMediaDataController().getReactionsMap().get("❤");
+                TLRPC.TL_availableReaction heart = getMediaDataController().getReactionsMap().get("❤️");
                 if (heart != null) {
                     ReactionsEffectOverlay.removeCurrent(false);
                     selectReaction(view, messageObject, null, null, x, y, ReactionsLayoutInBubble.VisibleReaction.fromEmojicon(heart), true, false, false, false);

@@ -265,6 +265,11 @@ public class UserConfig extends BaseController {
             clientUserId = user.id;
             checkPremiumSelf(oldUser, user);
         }
+        // Sanji Gram: lazy account init — this account just became active.
+        // If ImageLoader already exists, register its FileLoader delegate
+        // for this account now (the constructor loop only covers accounts
+        // that were active when ImageLoader was created).
+        ImageLoader.ensureFileLoaderDelegate(currentAccount);
     }
 
     private void checkPremiumSelf(TLRPC.User oldUser, TLRPC.User newUser) {

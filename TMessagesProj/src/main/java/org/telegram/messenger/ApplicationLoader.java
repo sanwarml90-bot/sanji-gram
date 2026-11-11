@@ -214,6 +214,11 @@ public class ApplicationLoader extends Application {
 
                     boolean isSlow = isConnectionSlow();
                     for (int a = 0; a < UserConfig.MAX_ACCOUNT_COUNT; a++) {
+                        // Sanji Gram: lazy account init — don't create heavy
+                        // controllers for accounts that were never logged into.
+                        if (a != 0 && !UserConfig.getInstance(a).isClientActivated()) {
+                            continue;
+                        }
                         ConnectionsManager.getInstance(a).checkConnection();
                         FileLoader.getInstance(a).onNetworkChanged(isSlow);
                     }
@@ -248,6 +253,16 @@ public class ApplicationLoader extends Application {
         SharedPrefsHelper.init(applicationContext);
         for (int a = 0; a < UserConfig.MAX_ACCOUNT_COUNT; a++) { //TODO improve account
             UserConfig.getInstance(a).loadConfig();
+            // Sanji Gram: lazy account init — creating MessagesController /
+            // ConnectionsManager for all 30 slots on the main thread at every
+            // launch (30 SQLite DBs + 30 native TgNet instances) caused the
+            // slow start and the crash loop. Only the primary slot (0) and
+            // accounts that are actually logged in get heavy controllers here;
+            // a fresh account's controllers are created on demand by the
+            // login flow (getInstance() calls) when the user logs into it.
+            if (a != 0 && !UserConfig.getInstance(a).isClientActivated()) {
+                continue;
+            }
             MessagesController.getInstance(a);
             if (a == 0) {
                 SharedConfig.pushStringStatus = "__FIREBASE_GENERATING_SINCE_" + ConnectionsManager.getInstance(a).getCurrentTime() + "__";
@@ -269,6 +284,10 @@ public class ApplicationLoader extends Application {
 
         MediaController.getInstance();
         for (int a = 0; a < UserConfig.MAX_ACCOUNT_COUNT; a++) { //TODO improve account
+            // Sanji Gram: lazy account init — see the loop above.
+            if (a != 0 && !UserConfig.getInstance(a).isClientActivated()) {
+                continue;
+            }
             ContactsController.getInstance(a).checkAppAccount();
             DownloadController.getInstance(a);
         }

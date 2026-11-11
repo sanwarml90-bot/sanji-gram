@@ -744,6 +744,11 @@ public class NotificationsSettingsActivity extends BaseFragment implements Notif
                 editor.commit();
                 SharedConfig.showNotificationsForAllAccounts = !enabled;
                 for (int a = 0; a < UserConfig.MAX_ACCOUNT_COUNT; a++) {
+                    // Sanji Gram: lazy account init — no notifications to
+                    // show/hide for an account that was never logged into.
+                    if (!UserConfig.getInstance(a).isClientActivated()) {
+                        continue;
+                    }
                     if (SharedConfig.showNotificationsForAllAccounts) {
                         NotificationsController.getInstance(a).showNotifications();
                     } else {

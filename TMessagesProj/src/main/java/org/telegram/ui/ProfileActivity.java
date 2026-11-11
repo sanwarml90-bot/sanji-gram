@@ -10649,10 +10649,14 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
     private void downloadAllSanjiGramMedia() {
         long did = sanjiGramDialogId();
         BulletinFactory.of(this).createCopyBulletin("Finding media...").show();
-        new Thread(() -> {
+        // Sanji Gram: DB queries must run on the storage queue (never a raw
+        // thread), and the cursor must be disposed in a finally block so an
+        // exception mid-loop can't leak it.
+        getMessagesStorage().getStorageQueue().postRunnable(() -> {
             int queued = 0;
+            SQLiteCursor cursor = null;
             try {
-                SQLiteCursor cursor = getMessagesStorage().getDatabase().queryFinalized("SELECT data FROM messages_v2 WHERE uid = " + did + " ORDER BY mid DESC LIMIT 500");
+                cursor = getMessagesStorage().getDatabase().queryFinalized("SELECT data FROM messages_v2 WHERE uid = " + did + " ORDER BY mid DESC LIMIT 500");
                 while (cursor.next()) {
                     NativeByteBuffer data = cursor.byteBufferValue(0);
                     if (data == null) {
@@ -10678,13 +10682,16 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
                         queued++;
                     }
                 }
-                cursor.dispose();
             } catch (Exception e) {
                 FileLog.e(e);
+            } finally {
+                if (cursor != null) {
+                    cursor.dispose();
+                }
             }
             int finalQueued = queued;
             AndroidUtilities.runOnUIThread(() -> BulletinFactory.of(ProfileActivity.this).createCopyBulletin("Downloading " + finalQueued + " media files").show());
-        }).start();
+        });
     }
 
     private void updateRowsIds() {
@@ -13905,6 +13912,10 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
                         } else if (chatId != 0) {
                             String label = ChatObject.isChannel(currentChat) ? "Channel ID" : "Chat ID";
                             detailCell.setTextAndValue(String.valueOf(chatId), label, false);
+                        } else {
+                            // Sanji Gram: neither id is known — clear the
+                            // recycled cell instead of showing stale content.
+                            detailCell.setTextAndValue("—", "ID", false);
                         }
                     } else if (position == sanjiChannelLinkRow) {
                         // Sanji Gram: copy channel link.
@@ -13915,14 +13926,21 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
                         // Sanji Gram: total message count (loaded async).
                         long did = userId != 0 ? userId : (chatId != 0 ? -chatId : dialogId);
                         detailCell.setTextAndValue("Loading...", "Messages", false);
+                        // Sanji Gram: tag the cell with this dialog id so the
+                        // async callback can tell if the cell was rebound for
+                        // another dialog while the count was loading.
+                        detailCell.setTag(R.id.sanji_msg_count_dialog_id, did);
                         final int msgCountRow = sanjiMsgCountRow;
                         getMessagesStorage().getMessagesCount(did, count -> AndroidUtilities.runOnUIThread(() -> {
-                            if (listView == null || msgCountRow == -1) {
+                            if (listView == null || msgCountRow == -1 || sanjiMsgCountRow != msgCountRow) {
                                 return;
                             }
                             RecyclerListView.Holder msgCountHolder = (RecyclerListView.Holder) listView.findViewHolderForPosition(msgCountRow);
                             if (msgCountHolder != null && msgCountHolder.itemView instanceof TextDetailCell) {
-                                ((TextDetailCell) msgCountHolder.itemView).setTextAndValue(String.valueOf(count), "Messages", false);
+                                Object tag = msgCountHolder.itemView.getTag(R.id.sanji_msg_count_dialog_id);
+                                if (tag instanceof Long && ((Long) tag).longValue() == did) {
+                                    ((TextDetailCell) msgCountHolder.itemView).setTextAndValue(String.valueOf(count), "Messages", false);
+                                }
                             }
                         }));
                     } else if (position == sanjiLockRow) {
