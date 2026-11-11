@@ -8808,9 +8808,17 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
             lockItem.setTextAndIcon(locked ? "Unlock Chat" : "Lock Chat", R.drawable.outline_header_lock_24);
             lockItem.setMinimumWidth(160);
             lockItem.setOnClickListener(e -> {
-                SanjiGramConfig.setChatLocked(dialogId, !SanjiGramConfig.isChatLocked(dialogId));
-                finishPreviewFragment();
-                BulletinFactory.of(DialogsActivity.this).createCopyBulletin(SanjiGramConfig.isChatLocked(dialogId) ? "Chat locked" : "Chat unlocked").show();
+                if (SanjiGramConfig.isChatLocked(dialogId)) {
+                    // Sanji Gram: unlocking needs the app passcode — never one tap.
+                    MessagesController.showSanjiGramUnlockPrompt(DialogsActivity.this, dialogId, () -> {
+                        finishPreviewFragment();
+                        BulletinFactory.of(DialogsActivity.this).createCopyBulletin("Chat unlocked").show();
+                    });
+                } else {
+                    SanjiGramConfig.setChatLocked(dialogId, true);
+                    finishPreviewFragment();
+                    BulletinFactory.of(DialogsActivity.this).createCopyBulletin("Chat locked").show();
+                }
             });
             previewMenu[0].addView(lockItem);
         }

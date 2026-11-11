@@ -32,6 +32,7 @@ import android.app.Activity;
 import android.app.ActivityManager;
 import android.app.Dialog;
 import android.content.ActivityNotFoundException;
+import android.content.ContentValues;
 import android.content.Context;
 import android.content.DialogInterface;
 import android.content.Intent;
@@ -67,6 +68,7 @@ import android.os.Build;
 import android.os.Bundle;
 import android.os.Environment;
 import android.os.SystemClock;
+import android.provider.MediaStore;
 import android.text.SpannableString;
 import android.text.SpannableStringBuilder;
 import android.text.Spanned;
@@ -328,6 +330,7 @@ import java.io.BufferedWriter;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
+import java.io.OutputStream;
 import java.io.OutputStreamWriter;
 import java.text.DecimalFormat;
 import java.text.DecimalFormatSymbols;
@@ -4504,12 +4507,18 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
                     copySanjiGramText("https://t.me/" + currentChat.username, "Channel link copied");
                 }
             } else if (position == sanjiLockRow) {
-                // Sanji Gram: toggle chat lock.
+                // Sanji Gram: toggle chat lock (unlocking needs the app passcode).
                 long did = userId != 0 ? userId : (chatId != 0 ? -chatId : dialogId);
-                boolean locked = !SanjiGramConfig.isChatLocked(did);
-                SanjiGramConfig.setChatLocked(did, locked);
-                BulletinFactory.of(ProfileActivity.this).createCopyBulletin(locked ? "Chat locked" : "Chat unlocked").show();
-                listAdapter.notifyItemChanged(position);
+                if (SanjiGramConfig.isChatLocked(did)) {
+                    MessagesController.showSanjiGramUnlockPrompt(ProfileActivity.this, did, () -> {
+                        BulletinFactory.of(ProfileActivity.this).createCopyBulletin("Chat unlocked").show();
+                        listAdapter.notifyItemChanged(position);
+                    });
+                } else {
+                    SanjiGramConfig.setChatLocked(did, true);
+                    BulletinFactory.of(ProfileActivity.this).createCopyBulletin("Chat locked").show();
+                    listAdapter.notifyItemChanged(position);
+                }
             } else if (position == sanjiExportRow) {
                 // Sanji Gram: export chat to .txt.
                 exportSanjiGramChat();
@@ -10524,9 +10533,12 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
             StringBuilder sb = new StringBuilder();
             SimpleDateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault());
             int count = 0;
+            int rowsSeen = 0;
+            SQLiteCursor cursor = null;
             try {
-                SQLiteCursor cursor = getMessagesStorage().getDatabase().queryFinalized("SELECT data FROM messages_v2 WHERE uid = " + did + " ORDER BY mid ASC LIMIT 2000");
+                cursor = getMessagesStorage().getDatabase().queryFinalized("SELECT data FROM messages_v2 WHERE uid = " + did + " ORDER BY mid ASC LIMIT 2000");
                 while (cursor.next()) {
+                    rowsSeen++;
                     NativeByteBuffer data = cursor.byteBufferValue(0);
                     if (data == null) {
                         continue;
@@ -10553,32 +10565,78 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
                     sb.append(sender).append(": ").append(text).append("\n");
                     count++;
                 }
-                cursor.dispose();
             } catch (Exception e) {
                 FileLog.e(e);
+            } finally {
+                if (cursor != null) {
+                    cursor.dispose();
+                }
             }
             int finalCount = count;
+            boolean capped = rowsSeen >= 2000;
             AndroidUtilities.runOnUIThread(() -> {
+                if (getParentActivity() == null) {
+                    return;
+                }
                 try {
                     String safeTitle = title.replaceAll("[^a-zA-Z0-9_\\- ]", "_").trim();
                     if (safeTitle.isEmpty()) {
                         safeTitle = "chat";
                     }
-                    File dir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS);
-                    if (!dir.exists()) {
-                        dir.mkdirs();
+                    String fileName = "SanjiGram_" + safeTitle + "_" + System.currentTimeMillis() + ".txt";
+                    String header = "Sanji Gram — Chat Export: " + title + "\nMessages: " + finalCount + (capped ? " (showing first 2000)" : "") + "\n\n";
+                    Uri shareUri = null;
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                        // Android 10+: scoped storage blocks direct writes to public
+                        // Downloads — write the file via MediaStore instead.
+                        try {
+                            ContentValues values = new ContentValues();
+                            values.put(MediaStore.Downloads.DISPLAY_NAME, fileName);
+                            values.put(MediaStore.Downloads.MIME_TYPE, "text/plain");
+                            values.put(MediaStore.Downloads.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS);
+                            shareUri = getParentActivity().getContentResolver().insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values);
+                            if (shareUri != null) {
+                                OutputStream os = getParentActivity().getContentResolver().openOutputStream(shareUri);
+                                if (os == null) {
+                                    shareUri = null;
+                                } else {
+                                    BufferedWriter writer = new BufferedWriter(new OutputStreamWriter(os, "UTF-8"));
+                                    writer.write(header);
+                                    writer.write(sb.toString());
+                                    writer.close();
+                                }
+                            }
+                        } catch (Exception e) {
+                            FileLog.e(e);
+                            if (shareUri != null) {
+                                try {
+                                    getParentActivity().getContentResolver().delete(shareUri, null, null);
+                                } catch (Exception ignored) {}
+                                shareUri = null;
+                            }
+                        }
                     }
-                    File file = new File(dir, "SanjiGram_" + safeTitle + "_" + System.currentTimeMillis() + ".txt");
-                    BufferedWriter writer = new BufferedWriter(new OutputStreamWriter(new FileOutputStream(file), "UTF-8"));
-                    writer.write("Sanji Gram — Chat Export: " + title + "\nMessages: " + finalCount + "\n\n");
-                    writer.write(sb.toString());
-                    writer.close();
+                    if (shareUri == null) {
+                        // Fallback: MediaStore insert failed (Android 10+), or Android 9
+                        // and below. The app's external files dir is always writable;
+                        // share the file from there via FileProvider.
+                        File dir = getParentActivity().getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS);
+                        if (dir == null) {
+                            dir = getParentActivity().getExternalFilesDir(null);
+                        }
+                        File file = new File(dir, fileName);
+                        BufferedWriter writer = new BufferedWriter(new OutputStreamWriter(new FileOutputStream(file), "UTF-8"));
+                        writer.write(header);
+                        writer.write(sb.toString());
+                        writer.close();
+                        shareUri = FileProvider.getUriForFile(getParentActivity(), ApplicationLoader.getApplicationId() + ".provider", file);
+                    }
                     Intent intent = new Intent(Intent.ACTION_SEND);
                     intent.setType("text/plain");
-                    intent.putExtra(Intent.EXTRA_STREAM, FileProvider.getUriForFile(getParentActivity(), ApplicationLoader.getApplicationId() + ".provider", file));
+                    intent.putExtra(Intent.EXTRA_STREAM, shareUri);
                     intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
                     getParentActivity().startActivity(Intent.createChooser(intent, "Share chat export"));
-                    BulletinFactory.of(ProfileActivity.this).createCopyBulletin("Exported " + finalCount + " messages").show();
+                    BulletinFactory.of(ProfileActivity.this).createCopyBulletin("Exported " + finalCount + " messages" + (capped ? " (first 2000)" : "")).show();
                 } catch (Exception e) {
                     FileLog.e(e);
                     BulletinFactory.of(ProfileActivity.this).createCopyBulletin("Export failed").show();
@@ -13857,11 +13915,12 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
                         // Sanji Gram: total message count (loaded async).
                         long did = userId != 0 ? userId : (chatId != 0 ? -chatId : dialogId);
                         detailCell.setTextAndValue("Loading...", "Messages", false);
+                        final int msgCountRow = sanjiMsgCountRow;
                         getMessagesStorage().getMessagesCount(did, count -> AndroidUtilities.runOnUIThread(() -> {
-                            if (listView == null || sanjiMsgCountRow == -1) {
+                            if (listView == null || msgCountRow == -1) {
                                 return;
                             }
-                            RecyclerListView.Holder holder = (RecyclerListView.Holder) listView.findViewHolderForPosition(sanjiMsgCountRow);
+                            RecyclerListView.Holder holder = (RecyclerListView.Holder) listView.findViewHolderForPosition(msgCountRow);
                             if (holder != null && holder.itemView instanceof TextDetailCell) {
                                 ((TextDetailCell) holder.itemView).setTextAndValue(String.valueOf(count), "Messages", false);
                             }

@@ -14749,10 +14749,6 @@ public class MessagesController extends BaseController implements NotificationCe
     }
 
     public void markDialogAsRead(long dialogId, int maxPositiveId, int maxNegativeId, int maxDate, boolean popup, long threadId, int countDiff, boolean readNow, int scheduledCount) {
-        // Sanji Gram: Ghost Mode — do not mark messages as read (no read receipts sent).
-        if (SanjiGramConfig.isGhostMode()) {
-            return;
-        }
         boolean createReadTask;
 
         if (threadId != 0) {
@@ -14875,7 +14871,9 @@ public class MessagesController extends BaseController implements NotificationCe
             monoForumPeerId = 0;
         }
 
-        if (createReadTask) {
+        // Sanji Gram: Ghost Mode — skip only the server read task (no read receipts
+        // sent); local unread state must still be cleared, or chats stay bold/unread forever.
+        if (createReadTask && !SanjiGramConfig.isGhostMode()) {
             Utilities.stageQueue.postRunnable(() -> {
                 ReadTask currentReadTask;
                 if (threadId != 0) {
@@ -22829,7 +22827,7 @@ public class MessagesController extends BaseController implements NotificationCe
         final EditText editText = new EditText(fragment.getParentActivity());
         editText.setHint("Passcode");
         editText.setSingleLine(true);
-        editText.setInputType(InputType.TYPE_CLASS_NUMBER | InputType.TYPE_NUMBER_VARIATION_PASSWORD);
+        editText.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_PASSWORD | InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS);
         editText.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 16);
         FrameLayout container = new FrameLayout(fragment.getParentActivity());
         container.addView(editText, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, Gravity.CENTER, 24, 4, 24, 4));
@@ -22838,6 +22836,46 @@ public class MessagesController extends BaseController implements NotificationCe
             String input = editText.getText().toString();
             if (SharedConfig.checkPasscode(input)) {
                 fragment.presentFragment(new ChatActivity(bundle), true);
+            } else {
+                showCantOpenAlert(fragment, "Wrong passcode.");
+            }
+        });
+        builder.setNegativeButton(LocaleController.getString(R.string.Cancel), null);
+        fragment.showDialog(builder.create());
+        editText.requestFocus();
+        AndroidUtilities.showKeyboard(editText);
+    }
+
+    /** Sanji Gram: ask for the app passcode before UNLOCKING a locked chat.
+     *  The passcode is only checked here — the chat is unlocked (and onUnlocked runs)
+     *  after {@link SharedConfig#checkPasscode} succeeds. If no app passcode is set
+     *  at all, unlocking is impossible until one is set in Settings. */
+    public static void showSanjiGramUnlockPrompt(BaseFragment fragment, long dialogId, Runnable onUnlocked) {
+        if (fragment == null || fragment.getParentActivity() == null) {
+            return;
+        }
+        if (SharedConfig.passcodeHash == null || SharedConfig.passcodeHash.isEmpty()) {
+            showCantOpenAlert(fragment, "This chat is locked. Set an app passcode in Settings to unlock it.");
+            return;
+        }
+        AlertDialog.Builder builder = new AlertDialog.Builder(fragment.getParentActivity(), fragment.getResourceProvider());
+        builder.setTitle("Unlock Chat");
+        builder.setMessage("Enter your app passcode to unlock this chat.");
+        final EditText editText = new EditText(fragment.getParentActivity());
+        editText.setHint("Passcode");
+        editText.setSingleLine(true);
+        editText.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_PASSWORD | InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS);
+        editText.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 16);
+        FrameLayout container = new FrameLayout(fragment.getParentActivity());
+        container.addView(editText, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, Gravity.CENTER, 24, 4, 24, 4));
+        builder.setView(container);
+        builder.setPositiveButton(LocaleController.getString(R.string.OK), (dialog, which) -> {
+            String input = editText.getText().toString();
+            if (SharedConfig.checkPasscode(input)) {
+                SanjiGramConfig.setChatLocked(dialogId, false);
+                if (onUnlocked != null) {
+                    onUnlocked.run();
+                }
             } else {
                 showCantOpenAlert(fragment, "Wrong passcode.");
             }

@@ -8437,6 +8437,19 @@ public class Theme {
                     }
                 }
             }
+        } else {
+            // Sanji Gram: switching back to Default must restore the stock typeface,
+            // otherwise the previous custom font stays on the paints until restart.
+            chat_msgTextPaint.setTypeface(android.graphics.Typeface.DEFAULT);
+            chat_replyTextPaint.setTypeface(android.graphics.Typeface.DEFAULT);
+            chat_quoteTextPaint.setTypeface(android.graphics.Typeface.DEFAULT);
+            if (chat_msgTextPaintEmoji != null) {
+                for (int i = 0; i < chat_msgTextPaintEmoji.length; i++) {
+                    if (chat_msgTextPaintEmoji[i] != null) {
+                        chat_msgTextPaintEmoji[i].setTypeface(android.graphics.Typeface.DEFAULT);
+                    }
+                }
+            }
         }
 
         if (chat_msgInDrawable != null && !fontsOnly) {

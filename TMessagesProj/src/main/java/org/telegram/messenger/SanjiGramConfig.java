@@ -246,7 +246,7 @@ public class SanjiGramConfig {
     }
 
     /** Auto-Reply rate limit: last reply time (ms) per dialog id, kept in-memory only. */
-    private static final java.util.HashMap<Long, Long> autoReplyLastTime = new java.util.HashMap<>();
+    private static final java.util.concurrent.ConcurrentHashMap<Long, Long> autoReplyLastTime = new java.util.concurrent.ConcurrentHashMap<>();
 
     public static boolean canAutoReplyNow(long dialogId) {
         Long last = autoReplyLastTime.get(dialogId);

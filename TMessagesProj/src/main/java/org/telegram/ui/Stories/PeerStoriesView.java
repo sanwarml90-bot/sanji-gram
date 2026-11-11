@@ -1822,8 +1822,11 @@ public class PeerStoriesView extends SizeNotifierFrameLayout implements Notifica
 
                         addViewStatistics(popupLayout, storyItem);
 
-                        if (!unsupported && !currentStory.isLive || SanjiGramConfig.isStorySaver()) {
-                            // Sanji Gram: Story Saver — save the story media to the gallery.
+                        // Sanji Gram: Story Saver — the Save item is shown for any
+                        // supported, non-live story. The unsupported/live guards always
+                        // apply: a live or unsupported story has no file to save, so
+                        // showing Save for those would be a silent no-op.
+                        if (!unsupported && !currentStory.isLive) {
                             final String str = currentStory.isVideo() ? getString(R.string.SaveVideo) : getString(R.string.SaveImage);
                             ActionBarMenuItem.addItem(popupLayout, R.drawable.msg_gallery, str, false, resourcesProvider).setOnClickListener(v -> {
                                 saveToGallery();
