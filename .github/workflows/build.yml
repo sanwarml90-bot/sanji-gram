@@ -22,13 +22,8 @@ jobs:
 
       - name: Set up Android SDK
         run: |
-          export ANDROID_HOME=$HOME/android-sdk
+          export ANDROID_HOME=$ANDROID_SDK_ROOT
           export PATH=$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/platform-tools:$PATH
-          mkdir -p $ANDROID_HOME/cmdline-tools
-          cd /tmp
-          curl -sL -o cmdtools.zip "https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip"
-          unzip -q cmdtools.zip -d $ANDROID_HOME/cmdline-tools
-          mv $ANDROID_HOME/cmdline-tools/cmdline-tools $ANDROID_HOME/cmdline-tools/latest
           yes | sdkmanager --licenses > /dev/null
           sdkmanager "platform-tools" "platforms;android-34" "build-tools;34.0.0" "ndk;25.1.8937393" "cmake;3.22.1"
           echo "ANDROID_HOME=$ANDROID_HOME" >> $GITHUB_ENV
