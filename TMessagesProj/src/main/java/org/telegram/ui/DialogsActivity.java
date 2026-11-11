@@ -2098,8 +2098,8 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
 
             // Sanji Gram: Plus-style filter tab bar — reserve its height at the top of the list.
             final float sanjiGramTabsVisibility = getSanjiGramTabsVisibilityFactor();
-            t += (int) (dp(SANJI_GRAM_TABS_HEIGHT) * sanjiGramTabsVisibility);
-            additionalPadding += (int) (dp(SANJI_GRAM_TABS_HEIGHT) * sanjiGramTabsVisibility);
+            t += (int) (dp(SANJI_GRAM_TABS_HEIGHT + 12) * sanjiGramTabsVisibility);
+            additionalPadding += (int) (dp(SANJI_GRAM_TABS_HEIGHT + 12) * sanjiGramTabsVisibility);
 
             if (topPanelLayout != null) {
                 final int h = (int) topPanelLayout.getAnimatedHeightWithPadding(lerp((float) dp(14), dp(7), filterTabsVisibility));
@@ -6632,7 +6632,7 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
             sanjiGramTabsView.setAlpha(sanjiGramFactor);
             sanjiGramTabsView.setVisibility(sanjiGramFactor > 0 ? View.VISIBLE : View.GONE);
             sanjiGramTabsView.setTranslationY(totalOffset - searchOffset);
-            totalOffset += dp(SANJI_GRAM_TABS_HEIGHT) * sanjiGramFactor;
+            totalOffset += dp(SANJI_GRAM_TABS_HEIGHT + 12) * sanjiGramFactor;
         }
 
         if (topPanelLayout != null) {
@@ -11196,7 +11196,10 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
             sanjiGramTabIcons[i] = icon;
             sanjiGramTabBadges[i] = badge;
         }
-        contentView.addView(sanjiGramTabsView, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, SANJI_GRAM_TABS_HEIGHT, Gravity.TOP, 8, 0, 8, 0));
+        // Sanji Gram: 12dp top margin so the bar never sits flush against the
+        // top edge (Sanji: "tabs bahut upar hai"). The list offsets below
+        // reserve SANJI_GRAM_TABS_HEIGHT + 12 for the same reason.
+        contentView.addView(sanjiGramTabsView, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, SANJI_GRAM_TABS_HEIGHT, Gravity.TOP, 8, 12, 8, 0));
         updateSanjiGramTabsSelection();
         updateSanjiGramTabBadges();
     }

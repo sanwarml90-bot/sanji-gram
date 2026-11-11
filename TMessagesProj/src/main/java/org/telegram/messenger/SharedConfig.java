@@ -1622,10 +1622,16 @@ public class SharedConfig {
         if (overrideDevicePerformanceClass != -1) {
             return overrideDevicePerformanceClass;
         }
-        if (devicePerformanceClass == -1) {
-            devicePerformanceClass = measureDevicePerformanceClass();
+        // Sanji Gram: measure only once per process. Two threads raced here at
+        // startup (main thread via ConnectionsManager.init + a background
+        // caller) and both ran the slow /sys cpufreq reads; with 30 DBs being
+        // created at the same time the main-thread call stuck for 5-10s (ANR).
+        synchronized (SharedConfig.class) {
+            if (devicePerformanceClass == -1) {
+                devicePerformanceClass = measureDevicePerformanceClass();
+            }
+            return devicePerformanceClass;
         }
-        return devicePerformanceClass;
     }
 
     public static int measureDevicePerformanceClass() {

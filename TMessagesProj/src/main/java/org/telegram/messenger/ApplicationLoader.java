@@ -195,6 +195,13 @@ public class ApplicationLoader extends Application {
         applicationInited = true;
         NativeLoader.initNativeLibs(ApplicationLoader.applicationContext);
 
+        // Sanji Gram: warm up the device performance class off the main thread.
+        // getDevicePerformanceClass() reads 8 /sys cpufreq files and is called
+        // from ConnectionsManager.init() on the main thread; measuring there
+        // while 30 DBs opened at once saturated the disk and ANR'd the app.
+        // Warming it up here means the main-thread call returns the cached value.
+        Utilities.globalQueue.postRunnable(() -> SharedConfig.getDevicePerformanceClass());
+
         try {
             LocaleController.getInstance(); //TODO improve
         } catch (Exception e) {

@@ -29,6 +29,7 @@ import android.text.SpannableStringBuilder;
 import android.text.Spanned;
 import android.text.TextUtils;
 import android.text.style.ClickableSpan;
+import android.util.TypedValue;
 import android.view.Gravity;
 import android.view.HapticFeedbackConstants;
 import android.view.MotionEvent;
@@ -339,7 +340,9 @@ public class DialogStoriesCell extends FrameLayout implements NotificationCenter
         telegramLogoView = new TextView(context);
         telegramLogoView.setContentDescription(getString(R.string.AppName));
         telegramLogoView.setText(getString(R.string.AppName));
-        telegramLogoView.setTextSize(dp(20));
+        // Sanji Gram: setTextSize(float) takes SP, dp(20) is PX (~40-52) and
+        // rendered the "Sanji Gram" stories title oversized/clipped.
+        telegramLogoView.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 20);
         telegramLogoView.setTypeface(AndroidUtilities.bold());
         telegramLogoView.setTextColor(getTextLogoColor());
         telegramLogoView.setGravity(Gravity.CENTER_VERTICAL);

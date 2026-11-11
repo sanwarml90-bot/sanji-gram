@@ -72,6 +72,7 @@ import java.util.Objects;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Consumer;
 
 import me.vkryl.core.BitwiseUtils;
@@ -112,6 +113,17 @@ public class MessagesStorage extends BaseController {
 
     private static volatile MessagesStorage[] Instance = new MessagesStorage[UserConfig.MAX_ACCOUNT_COUNT];
     private static final Object[] lockObjects = new Object[UserConfig.MAX_ACCOUNT_COUNT];
+    // Sanji Gram: serialize database opens across accounts. With 30 account
+    // slots, 30 storageQueues ran createTables() concurrently at startup and
+    // saturated the slow disk: the main thread stuck 5-10s in
+    // SharedConfig.measureDevicePerformanceClass() (ANR "app not responding"),
+    // the app was killed mid-createTables, the DBs were left at user_version 0
+    // and every next launch threw "malformed" and recreated them — an infinite
+    // startup loop (30x "create new database" + 58x "malformed" per launch in
+    // the logs, no FATAL). Account 0 bypasses the lock so the primary account
+    // opens immediately and chats load fast. Reentrant: openDatabase() recurses
+    // for malformed retries on the same thread.
+    private static final ReentrantLock sOpenDbLock = new ReentrantLock();
     static {
         for (int i = 0; i < UserConfig.MAX_ACCOUNT_COUNT; i++) {
             lockObjects[i] = new Object();
@@ -293,6 +305,23 @@ public class MessagesStorage extends BaseController {
     }
 
     public void openDatabase(int openTries) {
+        // Sanji Gram: see sOpenDbLock — serialize DB opens across accounts so
+        // 30 concurrent createTables() calls can't saturate the disk at startup.
+        boolean locked = false;
+        if (currentAccount != 0) {
+            sOpenDbLock.lock();
+            locked = true;
+        }
+        try {
+            openDatabaseInternal(openTries);
+        } finally {
+            if (locked) {
+                sOpenDbLock.unlock();
+            }
+        }
+    }
+
+    private void openDatabaseInternal(int openTries) {
         if (!NativeLoader.loaded()) {
             int tryCount = 0;
             while (!NativeLoader.loaded()) {
