@@ -270,6 +270,13 @@ public class UserConfig extends BaseController {
         // for this account now (the constructor loop only covers accounts
         // that were active when ImageLoader was created).
         ImageLoader.ensureFileLoaderDelegate(currentAccount);
+        // Sanji Gram: lazy DB open — this account's MessagesStorage may have
+        // been created before the login finished, while the openDatabase()
+        // activation gate still blocked it. Open it now that the account is
+        // active. openDatabase() is idempotent (openStarted flag), so this is
+        // a no-op when the database already opened.
+        MessagesStorage storage = MessagesStorage.getInstance(currentAccount);
+        storage.getStorageQueue().postRunnable(() -> storage.openDatabase(1));
     }
 
     private void checkPremiumSelf(TLRPC.User oldUser, TLRPC.User newUser) {

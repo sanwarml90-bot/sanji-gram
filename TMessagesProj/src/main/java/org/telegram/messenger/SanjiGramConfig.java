@@ -82,6 +82,14 @@ public class SanjiGramConfig {
     }
 
     public static void setAutoReplyText(String value) {
+        // Sanji Gram: cap the text — an unbounded reply text can fail to send
+        // or flood a chat if the owner pastes something huge by accident.
+        if (value == null) {
+            value = "";
+        }
+        if (value.length() > 500) {
+            value = value.substring(0, 500);
+        }
         prefs().edit().putString("auto_reply_text", value).apply();
     }
 
@@ -193,14 +201,28 @@ public class SanjiGramConfig {
         if (username == null || username.isEmpty()) {
             return;
         }
-        LinkedHashSet<String> set = getChannels();
-        set.add(username);
-        prefs().edit().putStringSet("channels", set).apply();
+        // Sanji Gram: Telegram usernames are 5-32 chars of letters, digits
+        // and underscore. Reject anything else so a bad paste can't save a
+        // broken channel entry that fails to resolve later.
+        if (!username.matches("[A-Za-z0-9_]{5,32}")) {
+            return;
+        }
+        synchronized (SETS_LOCK) {
+            LinkedHashSet<String> set = getChannels();
+            set.add(username);
+            putChannelSet(set);
+        }
     }
 
     public static void removeChannel(String username) {
-        LinkedHashSet<String> set = getChannels();
-        set.remove(username);
+        synchronized (SETS_LOCK) {
+            LinkedHashSet<String> set = getChannels();
+            set.remove(username);
+            putChannelSet(set);
+        }
+    }
+
+    private static void putChannelSet(LinkedHashSet<String> set) {
         prefs().edit().putStringSet("channels", set).apply();
     }
 
@@ -212,6 +234,12 @@ public class SanjiGramConfig {
     // reference after persisting, so readers never touch SharedPreferences.
     private static volatile java.util.Set<String> hiddenChatsCache;
     private static volatile java.util.Set<String> lockedChatsCache;
+
+    // Sanji Gram: all read-modify-write updates of the sets above (and the
+    // channel set) synchronize on this lock. Without it, two concurrent
+    // toggles can both read the same set and the second save silently drops
+    // the first change. Readers use the volatile caches and need no lock.
+    private static final Object SETS_LOCK = new Object();
 
     private static LinkedHashSet<String> getDialogIdSet(String key) {
         Set<String> stored = prefs().getStringSet(key, null);
@@ -233,14 +261,16 @@ public class SanjiGramConfig {
     }
 
     public static void setChatLocked(long dialogId, boolean locked) {
-        LinkedHashSet<String> set = getDialogIdSet("locked_chats");
-        if (locked) {
-            set.add(String.valueOf(dialogId));
-        } else {
-            set.remove(String.valueOf(dialogId));
+        synchronized (SETS_LOCK) {
+            LinkedHashSet<String> set = getDialogIdSet("locked_chats");
+            if (locked) {
+                set.add(String.valueOf(dialogId));
+            } else {
+                set.remove(String.valueOf(dialogId));
+            }
+            putDialogIdSet("locked_chats", set);
+            lockedChatsCache = set;
         }
-        putDialogIdSet("locked_chats", set);
-        lockedChatsCache = set;
     }
 
     /** Hidden chats (Hidden Chats). */
@@ -254,26 +284,35 @@ public class SanjiGramConfig {
     }
 
     public static void setChatHidden(long dialogId, boolean hidden) {
-        LinkedHashSet<String> set = getDialogIdSet("hidden_chats");
-        if (hidden) {
-            set.add(String.valueOf(dialogId));
-        } else {
-            set.remove(String.valueOf(dialogId));
+        synchronized (SETS_LOCK) {
+            LinkedHashSet<String> set = getDialogIdSet("hidden_chats");
+            if (hidden) {
+                set.add(String.valueOf(dialogId));
+            } else {
+                set.remove(String.valueOf(dialogId));
+            }
+            putDialogIdSet("hidden_chats", set);
+            hiddenChatsCache = set;
         }
-        putDialogIdSet("hidden_chats", set);
-        hiddenChatsCache = set;
     }
 
     /** Auto-Reply rate limit: last reply time (ms) per dialog id, kept in-memory only. */
     private static final java.util.concurrent.ConcurrentHashMap<Long, Long> autoReplyLastTime = new java.util.concurrent.ConcurrentHashMap<>();
 
     public static boolean canAutoReplyNow(long dialogId) {
-        Long last = autoReplyLastTime.get(dialogId);
+        // Sanji Gram: the check and the timestamp update must be atomic.
+        // get() + put() lets two threads both pass the check and send two
+        // replies. compute() runs atomically per key, so only the first
+        // caller inside the hour window gets true.
         long now = System.currentTimeMillis();
-        if (last != null && now - last < 3600_000L) {
-            return false;
-        }
-        autoReplyLastTime.put(dialogId, now);
-        return true;
+        boolean[] allowed = new boolean[1];
+        autoReplyLastTime.compute(dialogId, (key, last) -> {
+            if (last != null && now - last < 3600_000L) {
+                return last;
+            }
+            allowed[0] = true;
+            return now;
+        });
+        return allowed[0];
     }
 }

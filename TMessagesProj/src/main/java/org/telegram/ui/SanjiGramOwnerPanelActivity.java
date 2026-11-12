@@ -77,6 +77,12 @@ public class SanjiGramOwnerPanelActivity extends BaseFragment {
 
     @Override
     public View createView(Context context) {
+        // Sanji Gram: re-check ownership here, not only where the Settings
+        // row is added. If a non-owner ever reaches this fragment, show an
+        // empty view instead of the owner's controls.
+        if (!isOwner(getCurrentAccount())) {
+            return new FrameLayout(context);
+        }
         actionBar.setBackButtonImage(R.drawable.ic_ab_back);
         actionBar.setAllowOverlayTitle(true);
         actionBar.setActionBarMenuOnItemClick(new ActionBar.ActionBarMenuOnItemClick() {

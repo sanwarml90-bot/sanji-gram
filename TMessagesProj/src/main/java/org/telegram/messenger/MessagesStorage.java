@@ -120,10 +120,18 @@ public class MessagesStorage extends BaseController {
     // the app was killed mid-createTables, the DBs were left at user_version 0
     // and every next launch threw "malformed" and recreated them — an infinite
     // startup loop (30x "create new database" + 58x "malformed" per launch in
-    // the logs, no FATAL). Account 0 bypasses the lock so the primary account
-    // opens immediately and chats load fast. Reentrant: openDatabase() recurses
-    // for malformed retries on the same thread.
+    // the logs, no FATAL). Reentrant: openDatabase() recurses for malformed
+    // retries on the same thread. The selected account bypasses the lock so
+    // the primary account opens immediately and chats load fast.
     private static final ReentrantLock sOpenDbLock = new ReentrantLock();
+
+    // Sanji Gram: true once this account's database open has started. The
+    // constructor posts openDatabase(1) and UserConfig.setCurrentUser() posts
+    // it again when an account activates after its storage was created — the
+    // flag (checked only for openTries == 1) stops the second post from
+    // opening the database twice. Malformed retries use openTries 2/3 and
+    // bypass the flag. All touches happen on this account's storageQueue.
+    private volatile boolean openStarted = false;
     static {
         for (int i = 0; i < UserConfig.MAX_ACCOUNT_COUNT; i++) {
             lockObjects[i] = new Object();
@@ -305,10 +313,28 @@ public class MessagesStorage extends BaseController {
     }
 
     public void openDatabase(int openTries) {
-        // Sanji Gram: see sOpenDbLock — serialize DB opens across accounts so
-        // 30 concurrent createTables() calls can't saturate the disk at startup.
+        // Sanji Gram: activation gate — never open a database for an account
+        // that isn't logged in and isn't the selected account. Every created
+        // MessagesStorage posts openDatabase(1) from its constructor, and the
+        // trigger that creates all 30 storages at startup was never found in
+        // the Java code, so the gate has to live here: inactive slots return
+        // immediately (and count the latch down so ensureOpened() never hangs
+        // on them). Their database opens lazily when the account activates —
+        // UserConfig.setCurrentUser() posts openDatabase(1) again. The
+        // selected account bypasses the lock so chats load fast.
+        if (currentAccount != UserConfig.selectedAccount
+                && !UserConfig.getInstance(currentAccount).isClientActivated()) {
+            openSync.countDown();
+            return;
+        }
+        if (openTries == 1) {
+            if (openStarted) {
+                return;
+            }
+            openStarted = true;
+        }
         boolean locked = false;
-        if (currentAccount != 0) {
+        if (currentAccount != UserConfig.selectedAccount) {
             sOpenDbLock.lock();
             locked = true;
         }
@@ -435,9 +461,15 @@ public class MessagesStorage extends BaseController {
                 NotificationCenter.getInstance(currentAccount).postNotificationName(NotificationCenter.onDatabaseMigration, false);
             }
         });
-        loadDialogFilters();
-        loadUnreadMessages();
-        loadPendingTasks();
+        // Sanji Gram: only schedule the post-open work when the database
+        // actually opened. On a non-malformed failure the code above falls
+        // through with database == null, and the loaders would queue SQLite
+        // work against a null database.
+        if (database != null) {
+            loadDialogFilters();
+            loadUnreadMessages();
+            loadPendingTasks();
+        }
         try {
             openSync.countDown();
         } catch (Throwable ignore) {
@@ -1016,6 +1048,13 @@ public class MessagesStorage extends BaseController {
 
     private void loadPendingTasks() {
         storageQueue.postRunnable(() -> {
+            // Sanji Gram: serialize the post-open work across accounts. The
+            // openDatabase() lock is released before these runnables execute,
+            // so without this the 30 accounts' filter/unread/task queries run
+            // concurrently and saturate the disk again. The lock is only ever
+            // held while running a query — never while waiting on another
+            // account's work — so this cannot deadlock.
+            sOpenDbLock.lock();
             try {
                 SQLiteCursor cursor = database.queryFinalized("SELECT id, data FROM pending_tasks WHERE 1");
                 while (cursor.next()) {
@@ -1268,6 +1307,8 @@ public class MessagesStorage extends BaseController {
                 cursor.dispose();
             } catch (Exception e) {
                 checkSQLException(e);
+            } finally {
+                sOpenDbLock.unlock();
             }
         });
     }
@@ -2590,6 +2631,10 @@ public class MessagesStorage extends BaseController {
 
     private void loadDialogFilters() {
         storageQueue.postRunnable(() -> {
+            // Sanji Gram: serialize the post-open work across accounts (see
+            // loadPendingTasks — the openDatabase() lock is released before
+            // these runnables execute).
+            sOpenDbLock.lock();
             SQLiteCursor filtersCursor = null;
             SQLitePreparedStatement state = null;
             try {
@@ -2750,6 +2795,7 @@ public class MessagesStorage extends BaseController {
                 if (state != null) {
                     state.dispose();
                 }
+                sOpenDbLock.unlock();
             }
         });
     }
@@ -3824,6 +3870,10 @@ public class MessagesStorage extends BaseController {
 
     public void loadUnreadMessages() {
         storageQueue.postRunnable(() -> {
+            // Sanji Gram: serialize the post-open work across accounts (see
+            // loadPendingTasks — the openDatabase() lock is released before
+            // these runnables execute).
+            sOpenDbLock.lock();
             SQLiteCursor cursor = null;
             int magic = 0;
             try {
@@ -4061,6 +4111,7 @@ public class MessagesStorage extends BaseController {
                 if (cursor != null) {
                     cursor.dispose();
                 }
+                sOpenDbLock.unlock();
             }
         });
     }

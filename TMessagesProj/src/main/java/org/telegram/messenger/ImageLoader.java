@@ -2305,6 +2305,11 @@ public class ImageLoader {
             // accounts that are actually logged in. Accounts added later get
             // their delegate via ensureFileLoaderDelegate(), called from
             // UserConfig.setCurrentUser() when an account activates.
+            // Load the config first: if ImageLoader is created before an
+            // account's config was loaded, isClientActivated() would read
+            // false for a logged-in account and its delegate would never be
+            // registered. loadConfig() is idempotent (configLoaded flag).
+            UserConfig.getInstance(a).loadConfig();
             if (!UserConfig.getInstance(a).isClientActivated()) {
                 continue;
             }

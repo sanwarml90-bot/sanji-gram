@@ -1328,7 +1328,13 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
                     childTop = actionBar.getMeasuredHeight();
                 } else if (child instanceof ViewPage) {
                     childTop = 0;
-                } else if (child == topPanelLayout || child == topBubblesFadeView || child == filterTabsView) {
+                } else if (child == topPanelLayout || child == topBubblesFadeView || child == filterTabsView || child == sanjiGramTabsView) {
+                    // Sanji Gram: the filter tab bar is laid out like the
+                    // stock filter tabs — anchored below the ActionBar +
+                    // search field. Before this fix the bar fell through to
+                    // the default childTop = topMargin (12dp), so it sat
+                    // ~116dp too high (on top of the stories row / ActionBar)
+                    // instead of one stock-tab-height below the stock tabs.
                     childTop += actionBar.getMeasuredHeight();
                     childTop += dp(SEARCH_FIELD_HEIGHT);
                 } else if (dialogStoriesCell != null && dialogStoriesCell.getPremiumHint() == child) {
@@ -11196,10 +11202,11 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
             sanjiGramTabIcons[i] = icon;
             sanjiGramTabBadges[i] = badge;
         }
-        // Sanji Gram: 12dp top margin so the bar never sits flush against the
-        // top edge (Sanji: "tabs bahut upar hai"). The list offsets below
-        // reserve SANJI_GRAM_TABS_HEIGHT + 12 for the same reason.
-        contentView.addView(sanjiGramTabsView, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, SANJI_GRAM_TABS_HEIGHT, Gravity.TOP, 8, 12, 8, 0));
+        // Sanji Gram: top margin 0 — the bar's Y comes from ContentView.onLayout
+        // (same branch as the stock filter tabs) plus its translation in
+        // updateContextViewPosition. The +12 in the list offsets below stays:
+        // it is the gap between the bar and the first chat row.
+        contentView.addView(sanjiGramTabsView, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, SANJI_GRAM_TABS_HEIGHT, Gravity.TOP, 8, 0, 8, 0));
         updateSanjiGramTabsSelection();
         updateSanjiGramTabBadges();
     }

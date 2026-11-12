@@ -336,7 +336,7 @@ public class SharedConfig {
     public static boolean hasEmailLogin;
 
     @PerformanceClass
-    private static int devicePerformanceClass;
+    private static volatile int devicePerformanceClass;
     @PerformanceClass
     private static int overrideDevicePerformanceClass;
 
@@ -1622,16 +1622,25 @@ public class SharedConfig {
         if (overrideDevicePerformanceClass != -1) {
             return overrideDevicePerformanceClass;
         }
-        // Sanji Gram: measure only once per process. Two threads raced here at
+        // Sanji Gram: measure only once per process, without blocking the
+        // main thread on a background measurement. Two threads raced here at
         // startup (main thread via ConnectionsManager.init + a background
         // caller) and both ran the slow /sys cpufreq reads; with 30 DBs being
         // created at the same time the main-thread call stuck for 5-10s (ANR).
-        synchronized (SharedConfig.class) {
-            if (devicePerformanceClass == -1) {
-                devicePerformanceClass = measureDevicePerformanceClass();
+        // Double-checked locking on the volatile field: the fast path reads
+        // the cached value with no synchronization, so a main-thread call
+        // never waits on the background warm-up thread's measurement.
+        int perf = devicePerformanceClass;
+        if (perf == -1) {
+            synchronized (SharedConfig.class) {
+                perf = devicePerformanceClass;
+                if (perf == -1) {
+                    perf = measureDevicePerformanceClass();
+                    devicePerformanceClass = perf;
+                }
             }
-            return devicePerformanceClass;
         }
+        return perf;
     }
 
     public static int measureDevicePerformanceClass() {
