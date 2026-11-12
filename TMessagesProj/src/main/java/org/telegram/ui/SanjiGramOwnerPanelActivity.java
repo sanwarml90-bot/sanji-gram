@@ -63,12 +63,17 @@ public class SanjiGramOwnerPanelActivity extends BaseFragment {
 
     /** Opens the panel as "Sanji Settings" for any user (toggles only). */
     public static SanjiGramOwnerPanelActivity asUserSettings() {
-        SanjiGramOwnerPanelActivity fragment = new SanjiGramOwnerPanelActivity();
-        // Sanji Gram: pass user mode via arguments so it survives rotation.
         Bundle args = new Bundle();
         args.putBoolean("userMode", true);
-        fragment.setArguments(args);
-        return fragment;
+        return new SanjiGramOwnerPanelActivity(args);
+    }
+
+    public SanjiGramOwnerPanelActivity() {
+        super();
+    }
+
+    public SanjiGramOwnerPanelActivity(Bundle args) {
+        super(args);
     }
 
     private static final int ROW_OWNER_CARD = 1;
@@ -104,8 +109,10 @@ public class SanjiGramOwnerPanelActivity extends BaseFragment {
 
     @Override
     public View createView(Context context) {
-        // Sanji Gram: user mode comes from the fragment arguments (set by
-        // asUserSettings) so it survives rotation.
+        // Sanji Gram: user mode comes from the fragment arguments (passed
+        // via the Bundle constructor by asUserSettings) so it survives
+        // rotation. BaseFragment has no setArguments — arguments are set
+        // only by the BaseFragment(Bundle) constructor.
         if (getArguments() != null) {
             userMode = getArguments().getBoolean("userMode", userMode);
         }
