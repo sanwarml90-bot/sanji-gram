@@ -15,6 +15,7 @@ import org.telegram.messenger.AndroidUtilities;
 import org.telegram.messenger.BuildVars;
 import org.telegram.messenger.R;
 import org.telegram.messenger.SanjiGramConfig;
+import org.telegram.messenger.SharedConfig;
 import org.telegram.messenger.UserConfig;
 import org.telegram.ui.ActionBar.ActionBar;
 import org.telegram.ui.ActionBar.AlertDialog;
@@ -73,6 +74,7 @@ public class SanjiGramOwnerPanelActivity extends BaseFragment {
     private static final int ROW_FONT_PICKER = 82;
     private static final int ROW_ONLINE_STATUS = 83;
     private static final int ROW_AI_API_KEY = 85;
+    private static final int ROW_TOGGLE_PHONE_EMOJIS = 86;
     private static final int ROW_CHANNEL_BASE = 100;
 
     private UniversalRecyclerView listView;
@@ -141,6 +143,9 @@ public class SanjiGramOwnerPanelActivity extends BaseFragment {
         items.add(UItem.asButton(ROW_AUTO_REPLY_TEXT, R.drawable.msg_edit, "Auto-Reply Text", SanjiGramConfig.getAutoReplyText()));
         // Sanji Gram: AI Writer key — never show the key itself, only Set / Not set.
         items.add(UItem.asButton(ROW_AI_API_KEY, R.drawable.msg_edit, "AI API Key", SanjiGramConfig.hasAiApiKey() ? "Set (tap to change)" : "Not set — tap to add"));
+        // Sanji Gram: phone emojis — stock engine (SharedConfig.useSystemEmoji)
+        // already renders system emoji; this is only the toggle for it.
+        items.add(UItem.asCheck(ROW_TOGGLE_PHONE_EMOJIS, "Phone Emojis").setChecked(SharedConfig.useSystemEmoji));
         items.add(UItem.asCheck(ROW_TOGGLE_STORY_SAVER, "Story Saver").setChecked(SanjiGramConfig.isStorySaver()));
         items.add(UItem.asCheck(ROW_TOGGLE_PIN_UNLIMITED, "Pin Unlimited").setChecked(SanjiGramConfig.isPinUnlimited()));
         items.add(UItem.asCheck(ROW_TOGGLE_MSG_COUNTER, "Message Counter").setChecked(SanjiGramConfig.isMessageCounter()));
@@ -184,6 +189,13 @@ public class SanjiGramOwnerPanelActivity extends BaseFragment {
                 SanjiGramConfig.setAiApiKey(value);
                 listView.adapter.update(true);
             });
+        } else if (item.id == ROW_TOGGLE_PHONE_EMOJIS) {
+            // Sanji Gram: phone (system) emojis instead of Telegram's own.
+            toggleCheck(view, SharedConfig.useSystemEmoji, value -> {
+                SharedConfig.useSystemEmoji = value;
+                SharedConfig.saveConfig();
+            });
+            BulletinFactory.of(this).createCopyBulletin("Restart app to apply").show();
         } else if (item.id == ROW_FONT_PICKER) {
             int next = (SanjiGramConfig.getCustomFont() + 1) % 3;
             SanjiGramConfig.setCustomFont(next);
