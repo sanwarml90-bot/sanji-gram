@@ -224,6 +224,9 @@ public class MessageObject {
     public String monthKey;
     public boolean deleted;
     public boolean deletedByThanos;
+    // Sanji Gram: set when the sender deleted this message while Anti-Delete
+    // kept it visible. The cell draws a "Deleted" badge for it.
+    public boolean deletedByOther;
     public float audioProgress;
     public float forceSeekTo = -1;
     public int audioProgressMs;

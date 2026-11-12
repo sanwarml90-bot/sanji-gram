@@ -129,6 +129,7 @@ import org.telegram.messenger.MessagesController;
 import org.telegram.messenger.NotificationCenter;
 import org.telegram.messenger.R;
 import org.telegram.messenger.RichMessageLayout;
+import org.telegram.messenger.SanjiGramConfig;
 import org.telegram.messenger.SendMessagesHelper;
 import org.telegram.messenger.SharedConfig;
 import org.telegram.messenger.SvgHelper;
@@ -1120,6 +1121,10 @@ public class ChatMessageCell extends BaseCell implements SeekBar.SeekBarDelegate
     private Paint onceRadialCutPaint;
     private Paint onceRadialStrokePaint;
     private int onceRadialPaintColor;
+    // Sanji Gram: Deleted badge — red pill drawn over the "Deleted" time prefix.
+    private final Paint deletedBadgePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Paint deletedBadgeTextPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final RectF deletedBadgeRect = new RectF();
 
     private StickerSetLinkIcon stickerSetIcons;
 
@@ -18529,6 +18534,11 @@ public class ChatMessageCell extends BaseCell implements SeekBar.SeekBarDelegate
                 currentTimeString = TextUtils.concat(formatString(R.string.MessageScheduledRepeatSeconds, period), ", ", currentTimeString);
             }
         }
+        // Sanji Gram: Deleted badge — prepend the label so the time layout
+        // reserves space for it; the red pill is drawn over it in drawTimeInternal.
+        if (isDeletedBadge(messageObject)) {
+            currentTimeString = TextUtils.concat("Deleted  ", currentTimeString);
+        }
         timeTextWidth = timeWidth = (int) Math.ceil(Theme.chat_timePaint.measureText(currentTimeString, 0, currentTimeString == null ? 0 : currentTimeString.length()));
         if (currentMessageObject.scheduled && currentMessageObject.messageOwner.date == 0x7FFFFFFE || currentMessageObject.notime) {
             timeWidth -= dp(8);
@@ -23865,6 +23875,40 @@ public class ChatMessageCell extends BaseCell implements SeekBar.SeekBarDelegate
         return mediaBackground && (captionLayout == null || captionAbove) && (reactionsLayoutInBubble.isEmpty || reactionsLayoutInBubble.isSmall || currentMessageObject != null && (currentMessageObject.isAnyKindOfSticker() || currentMessageObject.isRoundVideo())) || currentMessageObject != null && currentMessageObject.type == MessageObject.TYPE_PAID_MEDIA/* || isMedia && drawCommentButton && !isRepliesChat*/;
     }
 
+    // Sanji Gram: Deleted badge — true when the sender deleted this message
+    // while Anti-Delete kept it visible (live flag, or the persisted mark
+    // from an earlier session).
+    private static boolean isDeletedBadge(MessageObject messageObject) {
+        if (messageObject == null) {
+            return false;
+        }
+        if (messageObject.deletedByOther) {
+            return true;
+        }
+        return SanjiGramConfig.isMarkedDeleted(messageObject.getDialogId(), messageObject.getId());
+    }
+
+    // Sanji Gram: red pill behind the "Deleted" prefix of the time text.
+    // Called after the time layout was drawn, when drawTimeX/drawTimeY hold
+    // its final position. Redraws the label in white on top of the pill.
+    private void drawDeletedBadge(Canvas canvas) {
+        if (currentMessageObject == null || timeLayout == null || !isDeletedBadge(currentMessageObject)) {
+            return;
+        }
+        if (transitionParams.animateEditedEnter && transitionParams.animateChangeProgress != 1f) {
+            return;
+        }
+        float textWidth = Theme.chat_timePaint.measureText("Deleted");
+        deletedBadgeRect.set(drawTimeX - dp(4), drawTimeY + dp(1), drawTimeX + textWidth + dp(4), drawTimeY + timeLayout.getHeight() - dp(1));
+        deletedBadgePaint.setColor(0xFFE53935);
+        canvas.drawRoundRect(deletedBadgeRect, dp(7), dp(7), deletedBadgePaint);
+        deletedBadgeTextPaint.setColor(0xFFFFFFFF);
+        deletedBadgeTextPaint.setTextSize(Theme.chat_timePaint.getTextSize());
+        deletedBadgeTextPaint.setTypeface(Typeface.DEFAULT_BOLD);
+        deletedBadgeTextPaint.setTextAlign(Paint.Align.LEFT);
+        canvas.drawText("Deleted", drawTimeX, drawTimeY + timeLayout.getLineBaseline(0), deletedBadgeTextPaint);
+    }
+
     public void drawTime(Canvas canvas, float alpha, boolean fromParent) {
         if (!drawFromPinchToZoom && delegate != null && delegate.getPinchToZoomHelper() != null && delegate.getPinchToZoomHelper().isInOverlayModeFor(this) && shouldDrawTimeOnMedia()) {
             return;
@@ -24155,6 +24199,7 @@ public class ChatMessageCell extends BaseCell implements SeekBar.SeekBarDelegate
             canvas.translate(drawTimeX = timeTitleTimeX + additionalX, drawTimeY = timeY - dp(7.3f) - timeLayout.getHeight());
             SpoilerEffect.layoutDrawMaybe(timeLayout, canvas);
             canvas.restore();
+            drawDeletedBadge(canvas);
             Theme.chat_timePaint.setAlpha(255);
         } else {
             if (currentMessageObject.isSponsored()) {
@@ -24248,6 +24293,7 @@ public class ChatMessageCell extends BaseCell implements SeekBar.SeekBarDelegate
                 SpoilerEffect.layoutDrawMaybe(timeLayout, canvas);
             }
             canvas.restore();
+            drawDeletedBadge(canvas);
         }
 
         if (currentMessageObject.isOutOwner()) {

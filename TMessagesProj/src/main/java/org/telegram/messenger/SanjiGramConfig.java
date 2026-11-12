@@ -154,6 +154,33 @@ public class SanjiGramConfig {
         prefs().edit().putBoolean("show_hidden_chats", value).apply();
     }
 
+    // ---------- Deleted-message badge ----------
+
+    private static volatile java.util.Set<String> deletedMarksCache;
+
+    /** Messages deleted by others, stored as "dialogId:msgId". Shown with a
+     * "Deleted" badge instead of vanishing (works with Anti-Delete). */
+    public static boolean isMarkedDeleted(long dialogId, int messageId) {
+        java.util.Set<String> cached = deletedMarksCache;
+        if (cached == null) {
+            cached = getDialogIdSet("deleted_marks");
+            deletedMarksCache = cached;
+        }
+        return cached.contains(dialogId + ":" + messageId);
+    }
+
+    public static void markDeleted(long dialogId, int messageId) {
+        synchronized (SETS_LOCK) {
+            LinkedHashSet<String> set = getDialogIdSet("deleted_marks");
+            if (set.size() > 2000) {
+                set.clear();
+            }
+            set.add(dialogId + ":" + messageId);
+            putDialogIdSet("deleted_marks", set);
+            deletedMarksCache = set;
+        }
+    }
+
     // ---------- Custom font: 0 = Default, 1 = Bold, 2 = Monospace ----------
 
     public static int getCustomFont() {

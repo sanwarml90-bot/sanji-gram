@@ -18504,6 +18504,10 @@ public class MessagesController extends BaseController implements NotificationCe
         LongSparseArray<ArrayList<Integer>> markContentAsReadMessages = null;
         SparseIntArray markAsReadEncrypted = null;
         LongSparseArray<ArrayList<Integer>> deletedMessages = null;
+        // Sanji Gram: Deleted badge — ids the sender deleted while Anti-Delete
+        // kept them visible. Applied (flag + prefs mark) in the same block
+        // that marks deletedMessages below; never posted as deletions.
+        LongSparseArray<ArrayList<Integer>> sanjiDeletedMessages = null;
         LongSparseArray<ArrayList<Integer>> deletedQuickReplyMessages = null;
         LongSparseArray<ArrayList<Integer>> scheduledDeletedMessages = null;
         LongSparseArray<ArrayList<Integer>> scheduledDeletedMessagesSent = null;
@@ -18902,6 +18906,17 @@ public class MessagesController extends BaseController implements NotificationCe
                     if (arrayList == null) {
                         arrayList = new ArrayList<>();
                         deletedMessages.put(0, arrayList);
+                    }
+                    arrayList.addAll(update.messages);
+                } else {
+                    // Sanji Gram: Deleted badge — record the ids instead of removing.
+                    if (sanjiDeletedMessages == null) {
+                        sanjiDeletedMessages = new LongSparseArray<>();
+                    }
+                    ArrayList<Integer> arrayList = sanjiDeletedMessages.get(0);
+                    if (arrayList == null) {
+                        arrayList = new ArrayList<>();
+                        sanjiDeletedMessages.put(0, arrayList);
                     }
                     arrayList.addAll(update.messages);
                 }
@@ -19431,6 +19446,18 @@ public class MessagesController extends BaseController implements NotificationCe
                     if (arrayList == null) {
                         arrayList = new ArrayList<>();
                         deletedMessages.put(dialogId, arrayList);
+                    }
+                    arrayList.addAll(update.messages);
+                } else {
+                    // Sanji Gram: Deleted badge — record the ids instead of removing.
+                    if (sanjiDeletedMessages == null) {
+                        sanjiDeletedMessages = new LongSparseArray<>();
+                    }
+                    long dialogId = -update.channel_id;
+                    ArrayList<Integer> arrayList = sanjiDeletedMessages.get(dialogId);
+                    if (arrayList == null) {
+                        arrayList = new ArrayList<>();
+                        sanjiDeletedMessages.put(dialogId, arrayList);
                     }
                     arrayList.addAll(update.messages);
                 }
@@ -21088,6 +21115,7 @@ public class MessagesController extends BaseController implements NotificationCe
         LongSparseArray<ArrayList<Integer>> markContentAsReadMessagesFinal = markContentAsReadMessages;
         SparseIntArray markAsReadEncryptedFinal = markAsReadEncrypted;
         LongSparseArray<ArrayList<Integer>> deletedMessagesFinal = deletedMessages;
+        LongSparseArray<ArrayList<Integer>> sanjiDeletedMessagesFinal = sanjiDeletedMessages;
         LongSparseArray<ArrayList<Integer>> deletedQuickRepliesMessagesFinal = deletedQuickReplyMessages;
         LongSparseArray<ArrayList<Integer>> scheduledDeletedMessagesFinal = scheduledDeletedMessages;
         LongSparseArray<ArrayList<Integer>> scheduledDeletedMessagesSentFinal = scheduledDeletedMessagesSent;
@@ -21211,6 +21239,44 @@ public class MessagesController extends BaseController implements NotificationCe
                     }
                 }
                 getNotificationsController().removeDeletedMessagesFromNotifications(deletedMessagesFinal, false);
+            }
+            // Sanji Gram: Deleted badge — flag the kept messages and persist
+            // the mark (survives restart via prefs). No removal, no
+            // notification: the message stays visible with a badge.
+            if (sanjiDeletedMessagesFinal != null) {
+                for (int a = 0, size = sanjiDeletedMessagesFinal.size(); a < size; a++) {
+                    long dialogId = sanjiDeletedMessagesFinal.keyAt(a);
+                    ArrayList<Integer> arrayList = sanjiDeletedMessagesFinal.valueAt(a);
+                    if (arrayList == null) {
+                        continue;
+                    }
+                    if (dialogId == 0) {
+                        for (int b = 0, size2 = arrayList.size(); b < size2; b++) {
+                            Integer id = arrayList.get(b);
+                            MessageObject obj = dialogMessagesByIds.get(id);
+                            if (obj != null) {
+                                obj.deletedByOther = true;
+                                SanjiGramConfig.markDeleted(obj.getDialogId(), id);
+                            }
+                        }
+                    } else {
+                        ArrayList<MessageObject> objs = dialogMessage.get(dialogId);
+                        if (objs != null) {
+                            for (int i = 0; i < objs.size(); ++i) {
+                                MessageObject obj = objs.get(i);
+                                if (obj != null) {
+                                    for (int b = 0, size2 = arrayList.size(); b < size2; b++) {
+                                        if (obj.getId() == arrayList.get(b)) {
+                                            obj.deletedByOther = true;
+                                            SanjiGramConfig.markDeleted(dialogId, arrayList.get(b));
+                                            break;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
             }
             if (deletedQuickRepliesMessagesFinal != null) {
                 for (int a = 0, size = deletedQuickRepliesMessagesFinal.size(); a < size; a++) {
