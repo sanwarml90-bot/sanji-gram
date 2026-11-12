@@ -21241,9 +21241,12 @@ public class MessagesController extends BaseController implements NotificationCe
                 getNotificationsController().removeDeletedMessagesFromNotifications(deletedMessagesFinal, false);
             }
             // Sanji Gram: Deleted badge — flag the kept messages and persist
-            // the mark (survives restart via prefs). No removal, no
-            // notification: the message stays visible with a badge.
+            // the mark (survives restart via prefs). No removal: the message
+            // stays visible with a badge. After flagging, the open chat is
+            // told to rebind its visible cells — without that, the cell keeps
+            // showing its old rendering and the badge never appears live.
             if (sanjiDeletedMessagesFinal != null) {
+                boolean sanjiBadgeChanged = false;
                 for (int a = 0, size = sanjiDeletedMessagesFinal.size(); a < size; a++) {
                     long dialogId = sanjiDeletedMessagesFinal.keyAt(a);
                     ArrayList<Integer> arrayList = sanjiDeletedMessagesFinal.valueAt(a);
@@ -21257,6 +21260,26 @@ public class MessagesController extends BaseController implements NotificationCe
                             if (obj != null) {
                                 obj.deletedByOther = true;
                                 SanjiGramConfig.markDeleted(obj.getDialogId(), id);
+                                sanjiBadgeChanged = true;
+                            } else {
+                                // Fallback: the message may be loaded in another
+                                // dialog's list (chat not open) — scan and mark it
+                                // so the badge shows when the chat is opened.
+                                for (int d = 0, dSize = dialogMessage.size(); d < dSize; d++) {
+                                    ArrayList<MessageObject> objs = dialogMessage.valueAt(d);
+                                    if (objs == null) {
+                                        continue;
+                                    }
+                                    for (int i = 0; i < objs.size(); ++i) {
+                                        MessageObject o = objs.get(i);
+                                        if (o != null && o.getId() == id) {
+                                            o.deletedByOther = true;
+                                            SanjiGramConfig.markDeleted(dialogMessage.keyAt(d), id);
+                                            sanjiBadgeChanged = true;
+                                            break;
+                                        }
+                                    }
+                                }
                             }
                         }
                     } else {
@@ -21269,6 +21292,7 @@ public class MessagesController extends BaseController implements NotificationCe
                                         if (obj.getId() == arrayList.get(b)) {
                                             obj.deletedByOther = true;
                                             SanjiGramConfig.markDeleted(dialogId, arrayList.get(b));
+                                            sanjiBadgeChanged = true;
                                             break;
                                         }
                                     }
@@ -21276,6 +21300,12 @@ public class MessagesController extends BaseController implements NotificationCe
                             }
                         }
                     }
+                }
+                if (sanjiBadgeChanged) {
+                    // This block runs on the updates thread, so post on the UI
+                    // thread. UPDATE_MASK_AVATAR is the mask ChatActivity maps
+                    // to updateVisibleRows(); the avatar itself is unchanged.
+                    getNotificationCenter().postNotificationNameOnUIThread(NotificationCenter.updateInterfaces, UPDATE_MASK_AVATAR);
                 }
             }
             if (deletedQuickRepliesMessagesFinal != null) {

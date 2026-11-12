@@ -623,7 +623,13 @@ public class ConnectionsManager extends BaseController {
             FileLog.d("selected ip strategy " + selectedStrategy);
         }
         native_setIpStrategy(currentAccount, selectedStrategy);
-        native_setNetworkAvailable(currentAccount, ApplicationLoader.isNetworkOnline(), ApplicationLoader.getCurrentNetworkType(), ApplicationLoader.isConnectionSlow());
+        // Sanji Gram: use the cached network check here. isNetworkOnline()
+        // makes up to 3 synchronous Binder calls to the system connectivity
+        // service; on this phone one of them stalled the main thread for 5s+
+        // during ConnectionsManager.init() (ANR, proven in FileLog 14:13:32).
+        // isNetworkOnlineFast() reuses the cached NetworkInfo (kept fresh by
+        // the system NetworkCallback) and assumes online when unknown.
+        native_setNetworkAvailable(currentAccount, ApplicationLoader.isNetworkOnlineFast(), ApplicationLoader.getCurrentNetworkType(), ApplicationLoader.isConnectionSlow());
     }
 
     public void setPushConnectionEnabled(boolean value) {

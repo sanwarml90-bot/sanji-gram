@@ -4,8 +4,10 @@ import static org.telegram.messenger.AndroidUtilities.dp;
 import static org.telegram.messenger.LocaleController.getString;
 
 import android.content.Context;
+import android.os.Bundle;
 import android.text.InputType;
 import android.text.TextUtils;
+import android.util.LongSparseArray;
 import android.util.TypedValue;
 import android.view.Gravity;
 import android.view.View;
@@ -13,10 +15,12 @@ import android.widget.FrameLayout;
 
 import org.telegram.messenger.AndroidUtilities;
 import org.telegram.messenger.BuildVars;
+import org.telegram.messenger.DialogObject;
 import org.telegram.messenger.R;
 import org.telegram.messenger.SanjiGramConfig;
 import org.telegram.messenger.SharedConfig;
 import org.telegram.messenger.UserConfig;
+import org.telegram.tgnet.TLRPC;
 import org.telegram.ui.ActionBar.ActionBar;
 import org.telegram.ui.ActionBar.AlertDialog;
 import org.telegram.ui.ActionBar.BaseFragment;
@@ -53,6 +57,20 @@ public class SanjiGramOwnerPanelActivity extends BaseFragment {
         return false;
     }
 
+    // Sanji Gram: user mode — the same feature toggles, for every user
+    // (opened from Settings as "Sanji Settings"). Owner-only rows stay hidden.
+    private boolean userMode;
+
+    /** Opens the panel as "Sanji Settings" for any user (toggles only). */
+    public static SanjiGramOwnerPanelActivity asUserSettings() {
+        SanjiGramOwnerPanelActivity fragment = new SanjiGramOwnerPanelActivity();
+        // Sanji Gram: pass user mode via arguments so it survives rotation.
+        Bundle args = new Bundle();
+        args.putBoolean("userMode", true);
+        fragment.setArguments(args);
+        return fragment;
+    }
+
     private static final int ROW_OWNER_CARD = 1;
     private static final int ROW_CONTACT_OWNER = 2;
     private static final int ROW_ADD_CHANNEL = 50;
@@ -75,6 +93,10 @@ public class SanjiGramOwnerPanelActivity extends BaseFragment {
     private static final int ROW_ONLINE_STATUS = 83;
     private static final int ROW_AI_API_KEY = 85;
     private static final int ROW_TOGGLE_PHONE_EMOJIS = 86;
+    private static final int ROW_ANALYSIS_CHATS = 62;
+    private static final int ROW_ANALYSIS_GROUPS = 63;
+    private static final int ROW_ANALYSIS_CHANNELS = 64;
+    private static final int ROW_ANALYSIS_CONTACTS = 65;
     private static final int ROW_CHANNEL_BASE = 100;
 
     private UniversalRecyclerView listView;
@@ -82,10 +104,16 @@ public class SanjiGramOwnerPanelActivity extends BaseFragment {
 
     @Override
     public View createView(Context context) {
+        // Sanji Gram: user mode comes from the fragment arguments (set by
+        // asUserSettings) so it survives rotation.
+        if (getArguments() != null) {
+            userMode = getArguments().getBoolean("userMode", userMode);
+        }
         // Sanji Gram: re-check ownership here, not only where the Settings
         // row is added. If a non-owner ever reaches this fragment, show an
-        // empty view instead of the owner's controls.
-        if (!isOwner(getCurrentAccount())) {
+        // empty view instead of the owner's controls. User mode (Sanji
+        // Settings for everyone) skips the owner gate.
+        if (!userMode && !isOwner(getCurrentAccount())) {
             return new FrameLayout(context);
         }
         actionBar.setBackButtonImage(R.drawable.ic_ab_back);
@@ -98,7 +126,7 @@ public class SanjiGramOwnerPanelActivity extends BaseFragment {
                 }
             }
         });
-        actionBar.setTitle("👑 Owner Panel");
+        actionBar.setTitle(userMode ? "Sanji Settings" : "👑 Owner Panel");
 
         FrameLayout contentView = new FrameLayout(context);
 
@@ -114,26 +142,41 @@ public class SanjiGramOwnerPanelActivity extends BaseFragment {
     private void fillItems(ArrayList<UItem> items, UniversalAdapter adapter) {
         channels = new ArrayList<>(SanjiGramConfig.getChannels());
 
-        items.add(UItem.asHeader("Owner"));
-        items.add(UItem.asButton(ROW_OWNER_CARD, R.drawable.filled_crown_on, SanjiGramConfig.OWNER_NAME, "Owner of Sanji Gram"));
-        items.add(UItem.asButton(ROW_CONTACT_OWNER, R.drawable.msg_recent, "Contact Owner", "@" + SanjiGramConfig.OWNER_USERNAME));
-        items.add(UItem.asShadow("Only you can see this panel."));
+        // Sanji Gram: owner-only sections — hidden in user mode (Sanji Settings).
+        if (!userMode) {
+            items.add(UItem.asHeader("Owner"));
+            items.add(UItem.asButton(ROW_OWNER_CARD, R.drawable.filled_crown_on, SanjiGramConfig.OWNER_NAME, "Owner of Sanji Gram"));
+            items.add(UItem.asButton(ROW_CONTACT_OWNER, R.drawable.msg_recent, "Contact Owner", "@" + SanjiGramConfig.OWNER_USERNAME));
+            items.add(UItem.asShadow("Only you can see this panel."));
 
-        items.add(UItem.asHeader("Channels"));
-        for (int i = 0; i < channels.size(); i++) {
-            String username = channels.get(i);
-            items.add(UItem.asButton(ROW_CHANNEL_BASE + i, R.drawable.msg_link, "@" + username, "Tap to open"));
+            items.add(UItem.asHeader("Channels"));
+            for (int i = 0; i < channels.size(); i++) {
+                String username = channels.get(i);
+                items.add(UItem.asButton(ROW_CHANNEL_BASE + i, R.drawable.msg_link, "@" + username, "Tap to open"));
+            }
+            items.add(UItem.asButton(ROW_ADD_CHANNEL, R.drawable.msg_add, "Add Channel", "Paste a t.me link or username"));
+            items.add(UItem.asShadow("Tap a channel to open it. Long-press a channel to remove it from this list."));
+
+            items.add(UItem.asHeader("Sanji Gram"));
+            items.add(UItem.asButton(ROW_VERSION, R.drawable.msg_info, "Version", BuildVars.BUILD_VERSION_STRING));
+            items.add(UItem.asButton(ROW_ACCOUNTS, R.drawable.settings_account, "Accounts", countActivatedAccounts() + " / " + UserConfig.MAX_ACCOUNT_COUNT + " logged in"));
+            items.add(UItem.asShadow("Sanji Gram supports up to " + UserConfig.MAX_ACCOUNT_COUNT + " accounts."));
+
+            // Sanji Gram: User Analysis — local only (this device/account).
+            // Cross-device user counts need a server, which Sanji blocked.
+            int[] dialogCounts = countDialogTypes();
+            items.add(UItem.asHeader("User Analysis"));
+            items.add(UItem.asButton(ROW_ANALYSIS_CHATS, R.drawable.msg_contact, "Private Chats", String.valueOf(dialogCounts[0])));
+            items.add(UItem.asButton(ROW_ANALYSIS_GROUPS, R.drawable.filled_calls_users, "Groups", String.valueOf(dialogCounts[1])));
+            items.add(UItem.asButton(ROW_ANALYSIS_CHANNELS, R.drawable.msg_channel, "Channels", String.valueOf(dialogCounts[2])));
+            items.add(UItem.asButton(ROW_ANALYSIS_CONTACTS, R.drawable.settings_account, "Contacts", String.valueOf(getContactsController().contacts.size())));
+            items.add(UItem.asShadow("Is device par ka data — sirf is phone/account ka. Dusre phones ke Sanji Gram users ginne ke liye server chahiye."));
         }
-        items.add(UItem.asButton(ROW_ADD_CHANNEL, R.drawable.msg_add, "Add Channel", "Paste a t.me link or username"));
-        items.add(UItem.asShadow("Tap a channel to open it. Long-press a channel to remove it from this list."));
-
-        items.add(UItem.asHeader("Sanji Gram"));
-        items.add(UItem.asButton(ROW_VERSION, R.drawable.msg_info, "Version", BuildVars.BUILD_VERSION_STRING));
-        items.add(UItem.asButton(ROW_ACCOUNTS, R.drawable.settings_account, "Accounts", countActivatedAccounts() + " / " + UserConfig.MAX_ACCOUNT_COUNT + " logged in"));
-        items.add(UItem.asShadow("Sanji Gram supports up to " + UserConfig.MAX_ACCOUNT_COUNT + " accounts."));
 
         items.add(UItem.asHeader("Features"));
-        items.add(UItem.asCheck(ROW_TOGGLE_FORCE_JOIN, "Force Join Channels").setChecked(SanjiGramConfig.isForceJoin()));
+        if (!userMode) {
+            items.add(UItem.asCheck(ROW_TOGGLE_FORCE_JOIN, "Force Join Channels").setChecked(SanjiGramConfig.isForceJoin()));
+        }
         items.add(UItem.asCheck(ROW_TOGGLE_ANTI_DELETE, "Anti-Delete").setChecked(SanjiGramConfig.isAntiDelete()));
         items.add(UItem.asCheck(ROW_TOGGLE_GHOST_MODE, "Ghost Mode").setChecked(SanjiGramConfig.isGhostMode()));
         items.add(UItem.asCheck(ROW_TOGGLE_SHOW_IDS, "Show IDs in Profile").setChecked(SanjiGramConfig.isShowIds()));
@@ -142,7 +185,10 @@ public class SanjiGramOwnerPanelActivity extends BaseFragment {
         items.add(UItem.asCheck(ROW_TOGGLE_AUTO_REPLY, "Auto-Reply").setChecked(SanjiGramConfig.isAutoReply()));
         items.add(UItem.asButton(ROW_AUTO_REPLY_TEXT, R.drawable.msg_edit, "Auto-Reply Text", SanjiGramConfig.getAutoReplyText()));
         // Sanji Gram: AI Writer key — never show the key itself, only Set / Not set.
-        items.add(UItem.asButton(ROW_AI_API_KEY, R.drawable.msg_edit, "AI API Key", SanjiGramConfig.hasAiApiKey() ? "Set (tap to change)" : "Not set — tap to add"));
+        // Owner only — hidden in user mode.
+        if (!userMode) {
+            items.add(UItem.asButton(ROW_AI_API_KEY, R.drawable.msg_edit, "AI API Key", SanjiGramConfig.hasAiApiKey() ? "Set (tap to change)" : "Not set — tap to add"));
+        }
         // Sanji Gram: phone emojis — stock engine (SharedConfig.useSystemEmoji)
         // already renders system emoji; this is only the toggle for it.
         items.add(UItem.asCheck(ROW_TOGGLE_PHONE_EMOJIS, "Phone Emojis").setChecked(SharedConfig.useSystemEmoji));
@@ -164,6 +210,26 @@ public class SanjiGramOwnerPanelActivity extends BaseFragment {
             }
         }
         return count;
+    }
+
+    /** Counts this account's dialogs by type: {private chats, groups, channels}. */
+    private int[] countDialogTypes() {
+        int users = 0, groups = 0, channels = 0;
+        LongSparseArray<TLRPC.Dialog> dict = getMessagesController().dialogs_dict;
+        for (int i = 0, n = dict.size(); i < n; i++) {
+            TLRPC.Dialog dialog = dict.valueAt(i);
+            if (dialog == null) {
+                continue;
+            }
+            if (DialogObject.isChannel(dialog)) {
+                channels++;
+            } else if (DialogObject.isUserDialog(dialog.id)) {
+                users++;
+            } else {
+                groups++;
+            }
+        }
+        return new int[]{users, groups, channels};
     }
 
     private void onItemClick(UItem item, View view, int position, float x, float y) {

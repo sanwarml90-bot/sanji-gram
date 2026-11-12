@@ -626,6 +626,10 @@ public class SettingsActivity extends BaseFragment implements NotificationCenter
             items.add(UItem.asShadow(null));
         }
 
+        // Sanji Gram: every user gets Sanji Settings (feature toggles on/off).
+        items.add(SettingCell.Factory.of(101, 0xFFEC407A, 0xFFAD1457, R.drawable.msg_settings, "Sanji Settings", "Anti-Delete, Ghost Mode and more features"));
+        items.add(UItem.asShadow(null));
+
         accountNumbers.clear();
         for (int a = 0; a < UserConfig.MAX_ACCOUNT_COUNT; a++) {
             if (UserConfig.getInstance(a).isClientActivated() && currentAccount != a) {
@@ -821,6 +825,10 @@ public class SettingsActivity extends BaseFragment implements NotificationCenter
             case 100:
                 // Sanji Gram: Owner Panel (only visible to the owner).
                 presentSettingFragment(new SanjiGramOwnerPanelActivity());
+                break;
+            case 101:
+                // Sanji Gram: Sanji Settings for every user (toggles only).
+                presentSettingFragment(SanjiGramOwnerPanelActivity.asUserSettings());
                 break;
             case 1:
                 presentSettingFragment(new UserInfoActivity());
