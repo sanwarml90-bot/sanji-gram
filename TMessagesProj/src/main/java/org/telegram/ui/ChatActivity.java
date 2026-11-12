@@ -4098,8 +4098,6 @@ public class ChatActivity extends BaseFragment implements
                     }
                 } else if (id == chat_menu_topic_create) {
                     presentFragment(TopicCreateFragment.create(-dialog_id, 0).setOpenInChatActivity(ChatActivity.this));
-                } else if (id == 888) {
-                    dumpCanvas();
                 } else if (id == 889) {
                     sendDebugRichMessage();
                 }
@@ -4567,9 +4565,12 @@ public class ChatActivity extends BaseFragment implements
             }
         }
 
-        if (BuildConfig.DEBUG_PRIVATE_VERSION && headerItem != null) {
-            headerItem.lazilyAddSubItem(888, R.drawable.menu_download_round, "Dump Canvas");
-        }
+        // Sanji Gram: "Dump Canvas" submenu entry REMOVED (build #18). Same
+        // crash as the account-menu entry removed in build #14: dumpCanvas()
+        // redraws the whole view with DebugRecordingCanvas, whose drawPatch()
+        // calls the hidden Canvas.drawPatch() super method — which does NOT
+        // exist on Oppo Android 11. This was the second copy of the entry;
+        // the first (MainTabsActivity account menu) was removed in build #14.
 
         actionModeViews.clear();
         selectedMessagesCountTextView = null;
