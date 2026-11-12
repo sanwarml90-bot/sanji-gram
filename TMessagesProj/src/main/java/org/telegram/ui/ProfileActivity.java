@@ -4759,10 +4759,9 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
                         };
 
                         builder.setItems(items, (dialog, which) -> {
-                            if (which == 0) { // Import Contacts
-                                getUserConfig().syncContacts = true;
+                            if (which == 0) { // Import Contacts — Sanji Gram: contact sync is always OFF, so this never imports.
+                                getUserConfig().syncContacts = false;
                                 getUserConfig().saveConfig(false);
-                                getContactsController().forceImportContacts();
                             } else if (which == 1) { // Reload Contacts
                                 getContactsController().loadContacts(false, 0);
                             } else if (which == 2) { // Reset Imported Contacts

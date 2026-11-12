@@ -21265,6 +21265,10 @@ public class MessagesController extends BaseController implements NotificationCe
                                 // Fallback: the message may be loaded in another
                                 // dialog's list (chat not open) — scan and mark it
                                 // so the badge shows when the chat is opened.
+                                // Stop after the first match: message ids are
+                                // per-dialog counters, so another dialog could
+                                // hold a message with the same id.
+                                scanDialogs:
                                 for (int d = 0, dSize = dialogMessage.size(); d < dSize; d++) {
                                     ArrayList<MessageObject> objs = dialogMessage.valueAt(d);
                                     if (objs == null) {
@@ -21276,7 +21280,7 @@ public class MessagesController extends BaseController implements NotificationCe
                                             o.deletedByOther = true;
                                             SanjiGramConfig.markDeleted(dialogMessage.keyAt(d), id);
                                             sanjiBadgeChanged = true;
-                                            break;
+                                            break scanDialogs;
                                         }
                                     }
                                 }

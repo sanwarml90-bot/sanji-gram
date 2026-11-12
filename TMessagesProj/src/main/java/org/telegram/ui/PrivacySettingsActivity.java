@@ -563,9 +563,10 @@ public class PrivacySettingsActivity extends BaseFragment implements Notificatio
                 archiveChats = !archiveChats;
                 cell.setChecked(archiveChats);
             } else if (position == contactsSyncRow) {
-                newSync = !newSync;
+                // Sanji Gram: contact sync is always OFF — the toggle stays off.
+                newSync = false;
                 if (view instanceof TextCheckCell) {
-                    ((TextCheckCell) view).setChecked(newSync);
+                    ((TextCheckCell) view).setChecked(false);
                 }
             } else if (position == secretMapRow) {
                 AlertsCreator.showSecretLocationAlert(getParentActivity(), currentAccount, () -> {
