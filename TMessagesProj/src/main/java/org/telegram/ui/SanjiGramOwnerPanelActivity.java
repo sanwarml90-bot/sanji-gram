@@ -7,7 +7,7 @@ import android.content.Context;
 import android.os.Bundle;
 import android.text.InputType;
 import android.text.TextUtils;
-import android.util.LongSparseArray;
+import androidx.collection.LongSparseArray;
 import android.util.TypedValue;
 import android.view.Gravity;
 import android.view.View;
