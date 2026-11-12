@@ -118,6 +118,33 @@ public class SanjiGramConfig {
         prefs().edit().putBoolean("story_saver", value).apply();
     }
 
+    // ---------- AI Writer (OpenRouter, free model) ----------
+
+    /** Free OpenRouter model used by the AI Writer. Verified working 2026-11-12. */
+    public static final String AI_MODEL = "cohere/north-mini-code:free";
+
+    public static final String AI_API_URL = "https://openrouter.ai/api/v1/chat/completions";
+
+    /** Fix mode: correct the user's text, keep language, script and meaning. */
+    public static final String AI_SYSTEM_FIX = "You are a helpful writing assistant. Fix the grammar, spelling and punctuation of the user's text. Keep the exact same language and script as the user's text (Roman Hinglish stays Roman Hinglish, Devanagari stays Devanagari, English stays English). Keep the original meaning and tone. Do not add new ideas. Return ONLY the corrected text, nothing else.";
+
+    /** Write mode: generate text from the user's prompt, same language and script. */
+    public static final String AI_SYSTEM_WRITE = "You are a helpful writing assistant. Write clear, natural text from the user's prompt, in the same language and script the user used (Roman Hinglish, Devanagari, or English). Keep it short and natural, like a real person texting. Return ONLY the text, nothing else.";
+
+    /** The user's own OpenRouter API key, entered in the Owner Panel.
+     * Stored only in private prefs on the phone — NEVER baked into the app. */
+    public static String getAiApiKey() {
+        return prefs().getString("ai_api_key", "");
+    }
+
+    public static void setAiApiKey(String value) {
+        prefs().edit().putString("ai_api_key", value == null ? "" : value.trim()).apply();
+    }
+
+    public static boolean hasAiApiKey() {
+        return !getAiApiKey().isEmpty();
+    }
+
     /** Pin Unlimited: when ON, the pinned-chat limit is raised. Default OFF. */
     public static boolean isPinUnlimited() {
         return prefs().getBoolean("pin_unlimited", false);
@@ -157,7 +184,6 @@ public class SanjiGramConfig {
     // ---------- Deleted-message badge ----------
 
     private static volatile java.util.Set<String> deletedMarksCache;
-
     /** Messages deleted by others, stored as "dialogId:msgId". Shown with a
      * "Deleted" badge instead of vanishing (works with Anti-Delete). */
     public static boolean isMarkedDeleted(long dialogId, int messageId) {

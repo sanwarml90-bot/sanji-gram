@@ -1689,6 +1689,9 @@ public class ChatActivity extends BaseFragment implements
 
     private final static int chat_menu_topic_create = 73;
 
+    // Sanji Gram: AI Writer button in the chat header.
+    private final static int sanji_ai = 75;
+
     private final static int id_chat_compose_panel = 1000;
 
     RecyclerListView.OnItemLongClickListenerExtended onItemLongClickListener = new RecyclerListView.OnItemLongClickListenerExtended() {
@@ -3740,6 +3743,9 @@ public class ChatActivity extends BaseFragment implements
                         getMessagesController().getTopicsController().toggleViewForumAsMessages(-dialog_id, false);
                         TopicsFragment.prepareToSwitchAnimation(ChatActivity.this);
                     }
+                } else if (id == sanji_ai) {
+                    // Sanji Gram: open the AI Writer page for this chat.
+                    presentFragment(new SanjiGramAiActivity(getDialogId()));
                 } else if (id == copy) {
                     SpannableStringBuilder str = new SpannableStringBuilder();
                     long previousUid = 0;
@@ -4276,6 +4282,11 @@ public class ChatActivity extends BaseFragment implements
                 searchItem.setVisibility(View.VISIBLE);
             }
             searchItemVisible = false;
+        }
+
+        if (currentEncryptedChat == null && !isReport()) {
+            // Sanji Gram: AI Writer button in the chat header.
+            menu.addItem(sanji_ai, R.drawable.input_ai).setContentDescription("AI");
         }
 
         if (chatMode == 0 && (threadMessageId == 0 || isTopic) && !UserObject.isReplyUser(currentUser) && !isReport()) {

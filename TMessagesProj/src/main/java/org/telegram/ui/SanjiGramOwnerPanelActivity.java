@@ -72,6 +72,7 @@ public class SanjiGramOwnerPanelActivity extends BaseFragment {
     private static final int ROW_TOGGLE_FORCE_JOIN = 84;
     private static final int ROW_FONT_PICKER = 82;
     private static final int ROW_ONLINE_STATUS = 83;
+    private static final int ROW_AI_API_KEY = 85;
     private static final int ROW_CHANNEL_BASE = 100;
 
     private UniversalRecyclerView listView;
@@ -138,6 +139,8 @@ public class SanjiGramOwnerPanelActivity extends BaseFragment {
         items.add(UItem.asCheck(ROW_TOGGLE_NO_ADS, "No Ads (hide sponsored)").setChecked(SanjiGramConfig.isNoAds()));
         items.add(UItem.asCheck(ROW_TOGGLE_AUTO_REPLY, "Auto-Reply").setChecked(SanjiGramConfig.isAutoReply()));
         items.add(UItem.asButton(ROW_AUTO_REPLY_TEXT, R.drawable.msg_edit, "Auto-Reply Text", SanjiGramConfig.getAutoReplyText()));
+        // Sanji Gram: AI Writer key — never show the key itself, only Set / Not set.
+        items.add(UItem.asButton(ROW_AI_API_KEY, R.drawable.msg_edit, "AI API Key", SanjiGramConfig.hasAiApiKey() ? "Set (tap to change)" : "Not set — tap to add"));
         items.add(UItem.asCheck(ROW_TOGGLE_STORY_SAVER, "Story Saver").setChecked(SanjiGramConfig.isStorySaver()));
         items.add(UItem.asCheck(ROW_TOGGLE_PIN_UNLIMITED, "Pin Unlimited").setChecked(SanjiGramConfig.isPinUnlimited()));
         items.add(UItem.asCheck(ROW_TOGGLE_MSG_COUNTER, "Message Counter").setChecked(SanjiGramConfig.isMessageCounter()));
@@ -172,6 +175,13 @@ public class SanjiGramOwnerPanelActivity extends BaseFragment {
         } else if (item.id == ROW_AUTO_REPLY_TEXT) {
             showEditTextDialog("Auto-Reply Text", SanjiGramConfig.getAutoReplyText(), value -> {
                 SanjiGramConfig.setAutoReplyText(value);
+                listView.adapter.update(true);
+            });
+        } else if (item.id == ROW_AI_API_KEY) {
+            // Sanji Gram: the dialog opens empty on purpose — the saved key
+            // is never displayed on screen.
+            showEditTextDialog("AI API Key", "", value -> {
+                SanjiGramConfig.setAiApiKey(value);
                 listView.adapter.update(true);
             });
         } else if (item.id == ROW_FONT_PICKER) {
