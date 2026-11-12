@@ -76,7 +76,8 @@ public class SanjiGramForceJoinActivity extends BaseFragment {
             req.username = username;
             ConnectionsManager.getInstance(account).sendRequest(req, (response, error) -> AndroidUtilities.runOnUIThread(() -> {
                 if (error == null && response instanceof TLRPC.TL_contacts_resolvedPeer) {
-                    TLRPC.Chat chat = ((TLRPC.TL_contacts_resolvedPeer) response).chat;
+                    TLRPC.TL_contacts_resolvedPeer res = (TLRPC.TL_contacts_resolvedPeer) response;
+                    TLRPC.Chat chat = findChat(res, username);
                     if (chat != null && chat.left) {
                         unjoined.add(username);
                     }
@@ -128,6 +129,21 @@ public class SanjiGramForceJoinActivity extends BaseFragment {
         return fragmentView = contentView;
     }
 
+    /** The resolve response carries chats in a list, not a single field. */
+    private static TLRPC.Chat findChat(TLRPC.TL_contacts_resolvedPeer res, String username) {
+        if (res.chats != null) {
+            for (TLRPC.Chat c : res.chats) {
+                if (c != null && username.equalsIgnoreCase(c.username)) {
+                    return c;
+                }
+            }
+            if (!res.chats.isEmpty()) {
+                return res.chats.get(0);
+            }
+        }
+        return null;
+    }
+
     /** Resolves each username to its channel object (needed to join it). */
     private void resolveChats() {
         int account = getCurrentAccount();
@@ -136,10 +152,13 @@ public class SanjiGramForceJoinActivity extends BaseFragment {
             req.username = username;
             ConnectionsManager.getInstance(account).sendRequest(req, (response, error) -> AndroidUtilities.runOnUIThread(() -> {
                 if (error == null && response instanceof TLRPC.TL_contacts_resolvedPeer) {
-                    TLRPC.Chat chat = ((TLRPC.TL_contacts_resolvedPeer) response).chat;
+                    TLRPC.TL_contacts_resolvedPeer res = (TLRPC.TL_contacts_resolvedPeer) response;
+                    TLRPC.Chat chat = findChat(res, username);
                     if (chat != null) {
                         // Cache it so addUserToChat finds it (getChat) and
                         // getInputChannel has the access hash.
+                        getMessagesController().putUsers(res.users, false);
+                        getMessagesController().putChats(res.chats, false);
                         getMessagesController().putChat(chat, false);
                         chats.put(username, chat);
                         if (!chat.left) {
