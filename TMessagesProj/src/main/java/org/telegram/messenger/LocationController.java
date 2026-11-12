@@ -608,6 +608,18 @@ public class LocationController extends BaseController implements NotificationCe
     }
 
     private void loadSharingLocations() {
+        // Sanji Gram: skip the database load for accounts that aren't logged
+        // in. Their MessagesStorage never opens a database (activation gate
+        // in openDatabase()), so getDatabase() is null here and the query
+        // below threw a NullPointerException for all 29 inactive accounts at
+        // every startup (build #13 logs: 29-116 NPEs per launch, all at this
+        // line, caught by FileLog — the app survived, but the log was full of
+        // red errors). An account that logs in later has no locally stored
+        // live locations to resume anyway; after a restart the account is
+        // activated and this load runs normally.
+        if (!getUserConfig().isClientActivated()) {
+            return;
+        }
         getMessagesStorage().getStorageQueue().postRunnable(() -> {
             final ArrayList<SharingLocationInfo> result = new ArrayList<>();
             final ArrayList<TLRPC.User> users = new ArrayList<>();
