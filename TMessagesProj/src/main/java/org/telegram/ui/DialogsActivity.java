@@ -7061,6 +7061,9 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
     @Override
     public void onResume() {
         super.onResume();
+        // Sanji Gram: forced join page — once per launch, non-owner accounts
+        // that haven't joined every Owner Panel channel get the join page.
+        SanjiGramForceJoinActivity.maybeShow(this);
         if (dialogStoriesCell != null) {
             dialogStoriesCell.onResume();
         }

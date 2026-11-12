@@ -16,6 +16,10 @@ public class SanjiGramConfig {
     /** Channel promoted in the Owner Panel. Change this once Sanji gives the real channel username. */
     public static final String CHANNEL_USERNAME = "sanjibomber";
 
+    /** Owner of Sanji Gram — shown in the Owner Panel with a Contact Owner row. */
+    public static final String OWNER_NAME = "Sanji";
+    public static final String OWNER_USERNAME = "Sanjipro5";
+
     private static SharedPreferences prefs() {
         return ApplicationLoader.applicationContext.getSharedPreferences("sanji_gram", Activity.MODE_PRIVATE);
     }
@@ -65,6 +69,18 @@ public class SanjiGramConfig {
 
     public static void setNoAds(boolean value) {
         prefs().edit().putBoolean("no_ads", value).apply();
+    }
+
+    /** Force Join: when ON, non-owner users must join every channel in the
+     * Owner Panel list before they can use the app (a page opens on login
+     * and closes once all channels are joined). The owner never sees it.
+     * Default ON. */
+    public static boolean isForceJoin() {
+        return prefs().getBoolean("force_join", true);
+    }
+
+    public static void setForceJoin(boolean value) {
+        prefs().edit().putBoolean("force_join", value).apply();
     }
 
     /** Auto-Reply: when ON, incoming private messages get an automatic reply. Default OFF. */

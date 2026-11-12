@@ -644,9 +644,16 @@ public class MainTabsActivity extends ViewPagerActivity implements NotificationC
             });
         }
 
-        if (BuildConfig.DEBUG_PRIVATE_VERSION) {
-            o.add(R.drawable.menu_download_round, "Dump Canvas", () -> AndroidUtilities.runOnUIThread(this::dumpCanvas, 1000));
-        }
+        // Sanji Gram: "Dump Canvas" menu entry REMOVED (build #14). The stock
+        // debug tool crashes on this phone: dumpCanvas() redraws the whole
+        // view with DebugRecordingCanvas, whose drawPatch() calls the hidden
+        // Canvas.drawPatch() super method — which does NOT exist on Oppo
+        // Android 11. Proven by the FATAL in Sanji's 11:55:06 log:
+        // NoSuchMethodError at DebugRecordingCanvas.drawPatch:1675, via
+        // NinePatchDrawable -> BlurredBackgroundDrawable -> dumpCanvas()
+        // -> MainTabsActivity "Dump Canvas" menu item. Every screen has
+        // NinePatch backgrounds, so it crashed on every tap. The tool is a
+        // developer-only canvas debugger Sanji doesn't need.
 
         if (accountNumbers.size() > 0) {
             if (o.getItemsCount() > 0) o.addGap();

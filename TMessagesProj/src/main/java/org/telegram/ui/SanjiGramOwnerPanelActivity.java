@@ -53,6 +53,7 @@ public class SanjiGramOwnerPanelActivity extends BaseFragment {
     }
 
     private static final int ROW_OWNER_CARD = 1;
+    private static final int ROW_CONTACT_OWNER = 2;
     private static final int ROW_ADD_CHANNEL = 50;
     private static final int ROW_VERSION = 60;
     private static final int ROW_ACCOUNTS = 61;
@@ -68,6 +69,7 @@ public class SanjiGramOwnerPanelActivity extends BaseFragment {
     private static final int ROW_TOGGLE_MSG_COUNTER = 79;
     private static final int ROW_TOGGLE_DOUBLE_TAP_LIKE = 80;
     private static final int ROW_TOGGLE_SHOW_HIDDEN = 81;
+    private static final int ROW_TOGGLE_FORCE_JOIN = 84;
     private static final int ROW_FONT_PICKER = 82;
     private static final int ROW_ONLINE_STATUS = 83;
     private static final int ROW_CHANNEL_BASE = 100;
@@ -110,7 +112,8 @@ public class SanjiGramOwnerPanelActivity extends BaseFragment {
         channels = new ArrayList<>(SanjiGramConfig.getChannels());
 
         items.add(UItem.asHeader("Owner"));
-        items.add(UItem.asButton(ROW_OWNER_CARD, R.drawable.filled_crown_on, "Sanji", "Owner of Sanji Gram"));
+        items.add(UItem.asButton(ROW_OWNER_CARD, R.drawable.filled_crown_on, SanjiGramConfig.OWNER_NAME, "Owner of Sanji Gram"));
+        items.add(UItem.asButton(ROW_CONTACT_OWNER, R.drawable.msg_recent, "Contact Owner", "@" + SanjiGramConfig.OWNER_USERNAME));
         items.add(UItem.asShadow("Only you can see this panel."));
 
         items.add(UItem.asHeader("Channels"));
@@ -127,6 +130,7 @@ public class SanjiGramOwnerPanelActivity extends BaseFragment {
         items.add(UItem.asShadow("Sanji Gram supports up to " + UserConfig.MAX_ACCOUNT_COUNT + " accounts."));
 
         items.add(UItem.asHeader("Features"));
+        items.add(UItem.asCheck(ROW_TOGGLE_FORCE_JOIN, "Force Join Channels").setChecked(SanjiGramConfig.isForceJoin()));
         items.add(UItem.asCheck(ROW_TOGGLE_ANTI_DELETE, "Anti-Delete").setChecked(SanjiGramConfig.isAntiDelete()));
         items.add(UItem.asCheck(ROW_TOGGLE_GHOST_MODE, "Ghost Mode").setChecked(SanjiGramConfig.isGhostMode()));
         items.add(UItem.asCheck(ROW_TOGGLE_SHOW_IDS, "Show IDs in Profile").setChecked(SanjiGramConfig.isShowIds()));
@@ -157,6 +161,9 @@ public class SanjiGramOwnerPanelActivity extends BaseFragment {
     private void onItemClick(UItem item, View view, int position, float x, float y) {
         if (item.id == ROW_OWNER_CARD) {
             openChannel(SanjiGramConfig.CHANNEL_USERNAME);
+        } else if (item.id == ROW_CONTACT_OWNER) {
+            // Sanji Gram: opens a chat with the owner (@Sanjipro5).
+            getMessagesController().openByUserName(SanjiGramConfig.OWNER_USERNAME, this, 0);
         } else if (item.id == ROW_ADD_CHANNEL) {
             showAddChannelDialog();
         } else if (item.id == ROW_VERSION) {
@@ -178,6 +185,8 @@ public class SanjiGramOwnerPanelActivity extends BaseFragment {
             listView.adapter.update(true);
         } else if (item.id >= ROW_CHANNEL_BASE && item.id < ROW_CHANNEL_BASE + channels.size()) {
             openChannel(channels.get(item.id - ROW_CHANNEL_BASE));
+        } else if (item.id == ROW_TOGGLE_FORCE_JOIN) {
+            toggleCheck(view, SanjiGramConfig.isForceJoin(), SanjiGramConfig::setForceJoin);
         } else if (item.id == ROW_TOGGLE_ANTI_DELETE) {
             toggleCheck(view, SanjiGramConfig.isAntiDelete(), SanjiGramConfig::setAntiDelete);
         } else if (item.id == ROW_TOGGLE_GHOST_MODE) {
