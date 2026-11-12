@@ -7,10 +7,11 @@ import android.view.View;
 import android.widget.FrameLayout;
 
 import org.telegram.messenger.AndroidUtilities;
-import org.telegram.messenger.ConnectionsManager;
 import org.telegram.messenger.MessagesController;
+import org.telegram.messenger.R;
 import org.telegram.messenger.SanjiGramConfig;
 import org.telegram.messenger.UserConfig;
+import org.telegram.tgnet.ConnectionsManager;
 import org.telegram.tgnet.TLRPC;
 import org.telegram.ui.ActionBar.ActionBar;
 import org.telegram.ui.ActionBar.BaseFragment;
@@ -64,7 +65,7 @@ public class SanjiGramForceJoinActivity extends BaseFragment {
                 || !SanjiGramConfig.isForceJoin()) {
             return;
         }
-        ArrayList<String> channels = SanjiGramConfig.getChannels();
+        ArrayList<String> channels = new ArrayList<>(SanjiGramConfig.getChannels());
         if (channels.isEmpty()) {
             return;
         }
